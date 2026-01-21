@@ -1,5 +1,10 @@
 # Maharashtra Education Dashboard - Local Hosting Guide
 
+## 🌐 Live Demo (GitHub Pages)
+
+- **Frontend UI**: [MAHA Education Dashboard (Demo)](https://oha2025g.github.io/MAHA-Education-Dashboard/)
+- Note: GitHub Pages hosts the **frontend only**. For real data + login, run **MongoDB + backend** locally (instructions below).
+
 ## 📋 Prerequisites
 
 Before you begin, ensure you have the following installed:

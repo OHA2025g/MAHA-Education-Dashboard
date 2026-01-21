@@ -1,6 +1,6 @@
 import "@/App.css";
 import { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import axios from "axios";
 import DashboardLayout from "./components/DashboardLayout";
 import StateOverview from "./pages/StateOverview";
@@ -33,6 +33,9 @@ const BACKEND_ORIGIN = (() => {
     return BACKEND_URL;
   }
 })();
+
+const IS_GITHUB_PAGES = typeof window !== "undefined" && window.location.hostname.endsWith("github.io");
+const ROUTER_BASENAME = process.env.PUBLIC_URL || "/";
 
 // Protected Route component
 const ProtectedRoute = ({ children, user, allowedRoles }) => {
@@ -139,52 +142,111 @@ function App() {
 
   return (
     <div className="App">
-      <BrowserRouter>
-        <Routes>
-          {/* Public route */}
-          <Route path="/login" element={
-            user ? <Navigate to="/executive-dashboard" replace /> : <LoginPage onLogin={handleLogin} />
-          } />
-          
-          {/* Protected routes */}
-          <Route path="/" element={
-            <ProtectedRoute user={user}>
-              <DashboardLayout user={user} onLogout={handleLogout} />
-            </ProtectedRoute>
-          }>
-            <Route index element={<StateOverview />} />
-            <Route path="health-index" element={<SchoolHealthIndex />} />
-            <Route path="data-import" element={
-              <ProtectedRoute user={user} allowedRoles={["admin"]}>
-                <DataImport />
-              </ProtectedRoute>
+      {IS_GITHUB_PAGES && BACKEND_URL.includes("localhost") ? (
+        <div className="mx-auto max-w-5xl px-4 pt-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span className="font-semibold">Demo mode:</span>{" "}
+            this GitHub Pages site hosts only the frontend UI. To see real data, run the backend + MongoDB locally and set{" "}
+            <code className="px-1 py-0.5 rounded bg-amber-100">REACT_APP_BACKEND_URL</code>.
+          </div>
+        </div>
+      ) : null}
+
+      {IS_GITHUB_PAGES ? (
+        <HashRouter>
+          <Routes>
+            {/* Public route */}
+            <Route path="/login" element={
+              user ? <Navigate to="/executive-dashboard" replace /> : <LoginPage onLogin={handleLogin} />
             } />
-            <Route path="aadhaar-analytics" element={<AadhaarDashboard />} />
-            <Route path="teacher-dashboard" element={<TeacherDashboard />} />
-            <Route path="infrastructure-dashboard" element={<InfrastructureDashboard />} />
-            <Route path="enrolment-dashboard" element={<EnrolmentDashboard />} />
-            <Route path="dropbox-dashboard" element={<DropboxDashboard />} />
-            <Route path="data-entry-dashboard" element={<DataEntryDashboard />} />
-            <Route path="age-enrolment-dashboard" element={<AgeEnrolmentDashboard />} />
-            <Route path="ctteacher-dashboard" element={<CTTeacherDashboard />} />
-            <Route path="apaar-dashboard" element={<APAARDashboard />} />
-            <Route path="classrooms-toilets-dashboard" element={<ClassroomsToiletsDashboard />} />
-            <Route path="executive-dashboard" element={<ExecutiveDashboard />} />
-            <Route path="analytics-dashboard" element={<AnalyticsDashboard />} />
-            <Route path="user-management" element={
-              <ProtectedRoute user={user} allowedRoles={["admin"]}>
-                <UserManagement />
+            
+            {/* Protected routes */}
+            <Route path="/" element={
+              <ProtectedRoute user={user}>
+                <DashboardLayout user={user} onLogout={handleLogout} />
               </ProtectedRoute>
+            }>
+              <Route index element={<StateOverview />} />
+              <Route path="health-index" element={<SchoolHealthIndex />} />
+              <Route path="data-import" element={
+                <ProtectedRoute user={user} allowedRoles={["admin"]}>
+                  <DataImport />
+                </ProtectedRoute>
+              } />
+              <Route path="aadhaar-analytics" element={<AadhaarDashboard />} />
+              <Route path="teacher-dashboard" element={<TeacherDashboard />} />
+              <Route path="infrastructure-dashboard" element={<InfrastructureDashboard />} />
+              <Route path="enrolment-dashboard" element={<EnrolmentDashboard />} />
+              <Route path="dropbox-dashboard" element={<DropboxDashboard />} />
+              <Route path="data-entry-dashboard" element={<DataEntryDashboard />} />
+              <Route path="age-enrolment-dashboard" element={<AgeEnrolmentDashboard />} />
+              <Route path="ctteacher-dashboard" element={<CTTeacherDashboard />} />
+              <Route path="apaar-dashboard" element={<APAARDashboard />} />
+              <Route path="classrooms-toilets-dashboard" element={<ClassroomsToiletsDashboard />} />
+              <Route path="executive-dashboard" element={<ExecutiveDashboard />} />
+              <Route path="analytics-dashboard" element={<AnalyticsDashboard />} />
+              <Route path="user-management" element={
+                <ProtectedRoute user={user} allowedRoles={["admin"]}>
+                  <UserManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="district/:districtCode" element={<DistrictDetail />} />
+              <Route path="block/:blockCode" element={<BlockDetail />} />
+              <Route path="school/:udiseCode" element={<SchoolDetail />} />
+            </Route>
+            
+            {/* Catch all - redirect to login or dashboard */}
+            <Route path="*" element={<Navigate to={user ? "/executive-dashboard" : "/login"} replace />} />
+          </Routes>
+        </HashRouter>
+      ) : (
+        <BrowserRouter basename={ROUTER_BASENAME}>
+          <Routes>
+            {/* Public route */}
+            <Route path="/login" element={
+              user ? <Navigate to="/executive-dashboard" replace /> : <LoginPage onLogin={handleLogin} />
             } />
-            <Route path="district/:districtCode" element={<DistrictDetail />} />
-            <Route path="block/:blockCode" element={<BlockDetail />} />
-            <Route path="school/:udiseCode" element={<SchoolDetail />} />
-          </Route>
-          
-          {/* Catch all - redirect to login or dashboard */}
-          <Route path="*" element={<Navigate to={user ? "/executive-dashboard" : "/login"} replace />} />
-        </Routes>
-      </BrowserRouter>
+            
+            {/* Protected routes */}
+            <Route path="/" element={
+              <ProtectedRoute user={user}>
+                <DashboardLayout user={user} onLogout={handleLogout} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<StateOverview />} />
+              <Route path="health-index" element={<SchoolHealthIndex />} />
+              <Route path="data-import" element={
+                <ProtectedRoute user={user} allowedRoles={["admin"]}>
+                  <DataImport />
+                </ProtectedRoute>
+              } />
+              <Route path="aadhaar-analytics" element={<AadhaarDashboard />} />
+              <Route path="teacher-dashboard" element={<TeacherDashboard />} />
+              <Route path="infrastructure-dashboard" element={<InfrastructureDashboard />} />
+              <Route path="enrolment-dashboard" element={<EnrolmentDashboard />} />
+              <Route path="dropbox-dashboard" element={<DropboxDashboard />} />
+              <Route path="data-entry-dashboard" element={<DataEntryDashboard />} />
+              <Route path="age-enrolment-dashboard" element={<AgeEnrolmentDashboard />} />
+              <Route path="ctteacher-dashboard" element={<CTTeacherDashboard />} />
+              <Route path="apaar-dashboard" element={<APAARDashboard />} />
+              <Route path="classrooms-toilets-dashboard" element={<ClassroomsToiletsDashboard />} />
+              <Route path="executive-dashboard" element={<ExecutiveDashboard />} />
+              <Route path="analytics-dashboard" element={<AnalyticsDashboard />} />
+              <Route path="user-management" element={
+                <ProtectedRoute user={user} allowedRoles={["admin"]}>
+                  <UserManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="district/:districtCode" element={<DistrictDetail />} />
+              <Route path="block/:blockCode" element={<BlockDetail />} />
+              <Route path="school/:udiseCode" element={<SchoolDetail />} />
+            </Route>
+            
+            {/* Catch all - redirect to login or dashboard */}
+            <Route path="*" element={<Navigate to={user ? "/executive-dashboard" : "/login"} replace />} />
+          </Routes>
+        </BrowserRouter>
+      )}
       <Toaster position="top-right" />
     </div>
   );
