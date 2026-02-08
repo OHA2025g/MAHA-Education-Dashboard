@@ -1,0 +1,39 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+
+# Environment files
+.env
+.env.local
+.env.*.local
+env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Data directories (should be mounted as volumes)
+data/
+
+# Docker files (don't copy into containers)
+docker-compose.yml
+Dockerfile
+.dockerignore
+DOCKER_DEPLOYMENT.md
+Makefile
+

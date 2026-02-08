@@ -14,7 +14,36 @@ Before you begin, ensure you have the following installed:
 3. **MongoDB** (v5.0 or higher) - [Download](https://www.mongodb.com/try/download/community)
 4. **Yarn** (Package manager) - Install with: `npm install -g yarn`
 
-## 🚀 Quick Start
+**OR** use Docker (recommended for production):
+- **Docker** (v20.10+) - [Download](https://www.docker.com/get-started)
+- **Docker Compose** (v2.0+) - Usually included with Docker Desktop
+
+## 🐳 Docker Deployment (Recommended)
+
+For easy deployment with Docker, see the [Docker Deployment Guide](DOCKER_DEPLOYMENT.md).
+
+**Quick Docker Start:**
+```bash
+# Copy environment file
+cp env.example .env
+
+# Edit .env with your settings (optional)
+# nano .env
+
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Access the application
+# Frontend: http://localhost
+# Backend API: http://localhost:8002
+```
+
+For more details, see [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md).
+
+## 🚀 Quick Start (Manual Setup)
 
 ### Step 1: Extract the Package
 ```bash
