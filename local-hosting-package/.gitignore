@@ -53,7 +53,8 @@ backend/uploads/*.xlsx
 backend/uploads/*.xls
 
 # Data (large files)
-data/mongodb/**/*.bson
+# Note: .bson files are included for database restoration
+# data/mongodb/**/*.bson  # Commented out to include database files
 data/excel/*.xlsx
 data/excel/*.xls
 
