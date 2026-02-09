@@ -1,7 +1,23 @@
 #!/bin/bash
 # Comprehensive Test Runner Script
+# Usage: Run from project root or backend directory
 
 set -e
+
+# Navigate to backend directory if not already there
+if [ ! -f "backend/pytest.ini" ]; then
+    if [ -f "pytest.ini" ]; then
+        # Already in backend directory
+        BACKEND_DIR="."
+    else
+        # Need to navigate to backend
+        cd "$(dirname "$0")/../backend" || exit 1
+        BACKEND_DIR="."
+    fi
+else
+    BACKEND_DIR="backend"
+    cd "$BACKEND_DIR" || exit 1
+fi
 
 echo "=========================================="
 echo "Pune School Dashboard - Test Suite"

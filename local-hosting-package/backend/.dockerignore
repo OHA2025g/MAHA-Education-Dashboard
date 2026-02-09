@@ -39,8 +39,9 @@ Thumbs.db
 .gitignore
 
 # Uploads (will be mounted as volume)
-uploads/*.xlsx
-uploads/*.xls
+uploads/
+*.xlsx
+*.xls
 
 # Testing
 .pytest_cache/

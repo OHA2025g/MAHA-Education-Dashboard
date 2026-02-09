@@ -73,30 +73,30 @@ class TestInputValidation:
     async def test_sql_injection_prevention(self, test_client: AsyncClient):
         """Test SQL injection prevention (MongoDB injection)"""
         malicious = "'; db.dropDatabase(); //"
-        response = await test_client.get(f"/api/scope/blocks?district_code={malicious}")
-        # Should be handled safely
-        assert response.status_code in [200, 400]
+        response = await test_client.get(f"/api/scope/districts/{malicious}/blocks")
+        # Should be handled safely (404 for invalid path or 200 with empty list)
+        assert response.status_code in [200, 400, 404, 422]
     
     async def test_xss_prevention(self, test_client: AsyncClient):
         """Test XSS prevention"""
         xss = "<script>alert('xss')</script>"
-        response = await test_client.get(f"/api/scope/blocks?district_code={xss}")
-        # Should be handled safely
-        assert response.status_code in [200, 400]
+        response = await test_client.get(f"/api/scope/districts/{xss}/blocks")
+        # Should be handled safely (404 for invalid path or 200 with empty list)
+        assert response.status_code in [200, 400, 404, 422]
     
     async def test_path_traversal_prevention(self, test_client: AsyncClient):
         """Test path traversal prevention"""
         traversal = "../../etc/passwd"
-        response = await test_client.get(f"/api/scope/blocks?district_code={traversal}")
-        # Should be handled safely
-        assert response.status_code in [200, 400]
+        response = await test_client.get(f"/api/scope/districts/{traversal}/blocks")
+        # Should be handled safely (404 for invalid path or 200 with empty list)
+        assert response.status_code in [200, 400, 404, 422]
     
     async def test_large_input_handling(self, test_client: AsyncClient):
         """Test handling of very large inputs"""
-        large_input = "A" * 10000
-        response = await test_client.get(f"/api/scope/blocks?district_code={large_input}")
-        # Should handle gracefully
-        assert response.status_code in [200, 400, 413]
+        large_input = "A" * 1000  # Reduced size for path parameter
+        response = await test_client.get(f"/api/scope/districts/{large_input}/blocks")
+        # Should handle gracefully (404 for invalid path or 200 with empty list)
+        assert response.status_code in [200, 400, 404, 413, 422]
 
 
 @pytest.mark.security

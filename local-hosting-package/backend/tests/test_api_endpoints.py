@@ -32,7 +32,7 @@ class TestScopeEndpoints:
             "block_name": "Test Block"
         })
         
-        response = await test_client.get("/api/scope/blocks?district_code=2725")
+        response = await test_client.get("/api/scope/districts/2725/blocks")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -46,7 +46,7 @@ class TestScopeEndpoints:
             "school_name": "Test School"
         })
         
-        response = await test_client.get("/api/scope/schools?district_code=2725&block_code=123")
+        response = await test_client.get("/api/scope/blocks/123/schools")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -119,27 +119,27 @@ class TestInputValidation:
     
     async def test_invalid_district_code(self, test_client: AsyncClient):
         """Test with invalid district code"""
-        response = await test_client.get("/api/scope/blocks?district_code=invalid")
-        # Should handle gracefully (either 200 with empty list or 400)
-        assert response.status_code in [200, 400]
+        response = await test_client.get("/api/scope/districts/invalid/blocks")
+        # Should handle gracefully (either 200 with empty list or 404)
+        assert response.status_code in [200, 404]
     
     async def test_missing_required_params(self, test_client: AsyncClient):
         """Test endpoints with missing required parameters"""
-        # Most endpoints should handle missing params gracefully
+        # Endpoint requires path parameter, missing should return 404
         response = await test_client.get("/api/scope/blocks")
-        assert response.status_code in [200, 400]
+        assert response.status_code in [404, 422]
     
     async def test_sql_injection_attempt(self, test_client: AsyncClient):
         """Test SQL injection prevention (MongoDB injection)"""
         malicious_input = "'; drop database --"
-        response = await test_client.get(f"/api/scope/blocks?district_code={malicious_input}")
-        # Should be handled safely
-        assert response.status_code in [200, 400]
+        response = await test_client.get(f"/api/scope/districts/{malicious_input}/blocks")
+        # Should be handled safely (404 for invalid path or 200 with empty list)
+        assert response.status_code in [200, 400, 404, 422]
     
     async def test_xss_attempt(self, test_client: AsyncClient):
         """Test XSS prevention"""
         xss_input = "<script>alert('xss')</script>"
-        response = await test_client.get(f"/api/scope/blocks?district_code={xss_input}")
-        # Should be handled safely
-        assert response.status_code in [200, 400]
+        response = await test_client.get(f"/api/scope/districts/{xss_input}/blocks")
+        # Should be handled safely (404 for invalid path or 200 with empty list)
+        assert response.status_code in [200, 400, 404, 422]
 

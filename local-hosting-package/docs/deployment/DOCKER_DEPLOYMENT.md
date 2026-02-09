@@ -19,7 +19,7 @@ This guide explains how to deploy the Pune School Dashboard using Docker and Doc
 
 2. **Create environment file**:
    ```bash
-   cp env.example .env
+   cp config/env.example .env
    ```
 
 3. **Edit `.env` file** with your configuration:

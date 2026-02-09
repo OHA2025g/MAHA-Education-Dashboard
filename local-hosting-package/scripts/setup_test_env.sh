@@ -1,7 +1,23 @@
 #!/bin/bash
 # Setup script for testing environment
+# Usage: Run from project root or backend directory
 
 set -e
+
+# Navigate to backend directory if not already there
+if [ ! -f "backend/pytest.ini" ]; then
+    if [ -f "pytest.ini" ]; then
+        # Already in backend directory
+        BACKEND_DIR="."
+    else
+        # Need to navigate to backend
+        cd "$(dirname "$0")/../backend" || exit 1
+        BACKEND_DIR="."
+    fi
+else
+    BACKEND_DIR="backend"
+    cd "$BACKEND_DIR" || exit 1
+fi
 
 echo "=========================================="
 echo "Setting up Test Environment"
@@ -20,14 +36,14 @@ python_version=$(python3 --version 2>&1 | awk '{print $2}')
 echo "Python version: $python_version"
 
 # Check if virtual environment exists
-if [ ! -d "venv" ]; then
+if [ ! -d "$BACKEND_DIR/venv" ]; then
     echo -e "${YELLOW}Creating virtual environment...${NC}"
-    python3 -m venv venv
+    python3 -m venv "$BACKEND_DIR/venv"
 fi
 
 # Activate virtual environment
 echo -e "${GREEN}Activating virtual environment...${NC}"
-source venv/bin/activate
+source "$BACKEND_DIR/venv/bin/activate"
 
 # Upgrade pip
 echo "Upgrading pip..."
@@ -35,7 +51,7 @@ pip install --upgrade pip
 
 # Install dependencies
 echo -e "${GREEN}Installing dependencies...${NC}"
-pip install -r requirements.txt
+pip install -r "$BACKEND_DIR/requirements.txt"
 
 # Check MongoDB connection
 echo ""
@@ -53,8 +69,8 @@ fi
 # Create test uploads directory
 echo ""
 echo "Creating test directories..."
-mkdir -p uploads
-mkdir -p tests/__pycache__
+mkdir -p "$BACKEND_DIR/uploads"
+mkdir -p "$BACKEND_DIR/tests/__pycache__"
 
 # Set test environment variables
 export TEST_MONGO_URL=${TEST_MONGO_URL:-mongodb://localhost:27017}

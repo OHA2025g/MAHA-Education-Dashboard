@@ -1,0 +1,89 @@
+================================================================================
+                    PUNE SCHOOL DASHBOARD - TESTING LINKS
+================================================================================
+
+✅ BACKEND API IS RUNNING
+⏳ FRONTEND IS STARTING (may take 30-60 seconds)
+
+================================================================================
+                            MAIN APPLICATION LINKS
+================================================================================
+
+🌐 Frontend Dashboard:
+   http://localhost:3005
+   (Note: Port 3005 because 3000 was in use)
+
+🔧 Backend API:
+   http://localhost:8002
+
+📚 API Documentation (Swagger):
+   http://localhost:8002/docs
+
+📖 API Documentation (ReDoc):
+   http://localhost:8002/redoc
+
+❤️  Health Check:
+   http://localhost:8002/api/health
+
+================================================================================
+                            QUICK TEST ENDPOINTS
+================================================================================
+
+Health Check:
+  curl http://localhost:8002/api/health
+
+API Root:
+  curl http://localhost:8002/api/
+
+Get Districts:
+  curl http://localhost:8002/api/scope/districts
+
+Login:
+  curl -X POST http://localhost:8002/api/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"email":"admin@mahaedume.gov.in","password":"admin123"}'
+
+Executive Overview:
+  curl http://localhost:8002/api/executive/overview
+
+CTTeacher Overview:
+  curl http://localhost:8002/api/ctteacher/overview
+
+Classrooms Overview:
+  curl http://localhost:8002/api/classrooms-toilets/overview
+
+================================================================================
+                            DEFAULT LOGIN CREDENTIALS
+================================================================================
+
+Email:    admin@mahaedume.gov.in
+Password: admin123
+
+================================================================================
+                            SERVICE STATUS
+================================================================================
+
+Backend API:  ✅ RUNNING on port 8002
+Frontend:     ⏳ STARTING on port 3005
+MongoDB:      ✅ Connected (backend health check working)
+
+================================================================================
+                            BROWSER TESTING
+================================================================================
+
+1. Open Frontend: http://localhost:3005
+   - Wait for React app to compile (30-60 seconds)
+   - Login with default credentials
+   - Navigate through dashboards
+
+2. Open API Docs: http://localhost:8002/docs
+   - Explore all endpoints
+   - Test endpoints directly
+   - View request/response schemas
+
+================================================================================
+
+For complete list of endpoints, see: docs/testing/TESTING_LINKS.md
+
+================================================================================
+

@@ -20,12 +20,12 @@ Before you begin, ensure you have the following installed:
 
 ## 🐳 Docker Deployment (Recommended)
 
-For easy deployment with Docker, see the [Docker Deployment Guide](DOCKER_DEPLOYMENT.md).
+For easy deployment with Docker, see the [Docker Deployment Guide](docs/deployment/DOCKER_DEPLOYMENT.md).
 
 **Quick Docker Start:**
 ```bash
 # Copy environment file
-cp env.example .env
+cp config/env.example .env
 
 # Edit .env with your settings (optional)
 # nano .env
@@ -41,7 +41,7 @@ docker-compose logs -f
 # Backend API: http://localhost:8002
 ```
 
-For more details, see [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md).
+For more details, see [DOCKER_DEPLOYMENT.md](docs/deployment/DOCKER_DEPLOYMENT.md).
 
 ## 🚀 Quick Start (Manual Setup)
 
