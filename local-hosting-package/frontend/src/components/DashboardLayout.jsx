@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
+import PageTransition from "./PageTransition";
 import { 
   LayoutDashboard, 
   Users, 
@@ -28,9 +29,10 @@ import {
   Brain
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import ScopeFilter from "@/components/ScopeFilter";
 import { ScopeProvider } from "@/context/ScopeContext";
+import CommandPalette from "@/components/CommandPalette";
+import ThemeToggle from "@/components/ThemeToggle";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -62,6 +64,9 @@ const DashboardLayout = ({ user, onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const isMacLike = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+  const cmdKey = isMacLike ? "⌘" : "Ctrl";
   
   // Filter nav items based on user role
   const filteredNavItems = navItems.filter(item => {
@@ -180,9 +185,11 @@ const DashboardLayout = ({ user, onLogout }) => {
       )}
       
       {/* Main Content */}
-      <main className="main-content">
+      <main className="main-content relative">
+        {/* Decorative background */}
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_10%,hsl(var(--accent))_0%,transparent_45%),radial-gradient(circle_at_80%_0%,hsl(var(--chart-3))_0%,transparent_40%)] opacity-[0.10]" />
         {/* Header */}
-        <header className="dashboard-header px-4 lg:px-8 py-4">
+        <header className="dashboard-header glass px-4 lg:px-8 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <Button
@@ -219,14 +226,20 @@ const DashboardLayout = ({ user, onLogout }) => {
               <div className="hidden lg:block">
                 <ScopeFilter />
               </div>
-              <div className="relative hidden md:block">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input 
-                  placeholder="Search schools, districts..." 
-                  className="pl-9 w-64 bg-slate-50 border-slate-200"
-                  data-testid="search-input"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event("open-command-palette"))}
+                className="hidden md:flex items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm text-muted-foreground shadow-sm hover:bg-background transition"
+                data-testid="search-input"
+                title="Search (Ctrl/⌘ + K)"
+              >
+                <Search className="h-4 w-4" />
+                <span className="truncate">Search dashboards…</span>
+                <span className="ml-6 inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
+                  <span className="font-medium">{cmdKey}</span>K
+                </span>
+              </button>
+              <ThemeToggle />
               <Button variant="ghost" size="icon" className="relative" data-testid="notifications-btn">
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
@@ -245,9 +258,12 @@ const DashboardLayout = ({ user, onLogout }) => {
         
         {/* Page Content */}
         <div className="p-4 lg:p-8">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </div>
       </main>
+      <CommandPalette navItems={filteredNavItems} onLogout={handleLogout} />
       </div>
     </ScopeProvider>
   );

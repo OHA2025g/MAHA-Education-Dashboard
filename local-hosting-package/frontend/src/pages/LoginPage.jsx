@@ -8,8 +8,11 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Eye, EyeOff, LogIn, Mail, Lock, Building2 } from "lucide-react";
 import { getBackendUrl } from "@/lib/backend";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const BACKEND_URL = getBackendUrl();
+const DEMO_EMAIL = "admin@mahaedume.gov.in";
+const DEMO_PASSWORD = "admin123";
 
 const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
@@ -70,6 +73,9 @@ const LoginPage = ({ onLogin }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        <div className="flex justify-end mb-2">
+          <ThemeToggle className="text-white hover:bg-white/10" />
+        </div>
         {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 mb-4">
@@ -176,6 +182,19 @@ const LoginPage = ({ onLogin }) => {
                     Forgot password?
                   </button>
                 </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-slate-600 bg-slate-800/40 text-slate-200 hover:bg-slate-700/40"
+                  onClick={() => {
+                    setEmail(DEMO_EMAIL);
+                    setPassword(DEMO_PASSWORD);
+                    toast.message("Demo credentials filled");
+                  }}
+                >
+                  Use demo credentials
+                </Button>
                 
                 <Button 
                   type="submit" 
@@ -200,7 +219,7 @@ const LoginPage = ({ onLogin }) => {
                 Default credentials for testing:
               </p>
               <p className="text-center text-xs text-slate-500 mt-1">
-                admin@mahaedume.gov.in / admin123
+                {DEMO_EMAIL} / {DEMO_PASSWORD}
               </p>
             </div>
           </CardContent>

@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
+import os
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from models.user import (
     UserCreate, UserUpdate, UserResponse, UserRole,
@@ -23,12 +25,59 @@ def init_db(database):
     global db
     db = database
 
+def get_db():
+    """Get database connection, re-initialize if needed"""
+    global db
+    if db is None:
+        # Re-initialize from environment - use same connection as server.py
+        from pathlib import Path
+        from dotenv import load_dotenv
+        ROOT_DIR = Path(__file__).parent.parent
+        load_dotenv(ROOT_DIR / '.env')
+        load_dotenv(ROOT_DIR / ".env.local", override=True)
+        mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+        db_name = os.environ.get('DB_NAME', 'maharashtra_edu')
+        client = AsyncIOMotorClient(mongo_url)
+        db = client[db_name]
+    return db
+
 @router.post("/login", response_model=Token)
 async def login(request: LoginRequest):
     """Login with email and password"""
-    user = await db.users.find_one({"email": request.email})
+    # Use global db, or get_db() if not set
+    database = db if db is not None else get_db()
     
-    if not user or not verify_password(request.password, user["hashed_password"]):
+    # Find user
+    user = await database.users.find_one({"email": request.email})
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
+    
+    # Get password hash
+    hashed_pwd = user.get("hashed_password", "")
+    
+    if not hashed_pwd:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User has no password hash"
+        )
+    
+    # Verify password using direct bcrypt (bypass passlib issues)
+    import bcrypt
+    try:
+        # Ensure both are bytes
+        password_bytes = request.password.encode('utf-8')
+        hash_bytes = hashed_pwd.encode('utf-8') if isinstance(hashed_pwd, str) else hashed_pwd
+        
+        password_valid = bcrypt.checkpw(password_bytes, hash_bytes)
+    except Exception as e:
+        # If bcrypt fails, try verify_password as fallback
+        password_valid = verify_password(request.password, hashed_pwd)
+    
+    if not password_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"

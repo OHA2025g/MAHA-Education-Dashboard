@@ -1,4 +1,7 @@
-.PHONY: help build up down restart logs clean backup restore
+.PHONY: help build up down restart logs clean backup restore prod
+
+COMPOSE_FILE = docker-compose.yml
+COMPOSE = docker compose -f $(COMPOSE_FILE)
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -7,44 +10,44 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 build: ## Build all Docker images
-	docker-compose build
+	$(COMPOSE) build
 
 up: ## Start all services
-	docker-compose up -d
+	$(COMPOSE) up -d
 
 down: ## Stop all services
-	docker-compose down
+	$(COMPOSE) down
 
 restart: ## Restart all services
-	docker-compose restart
+	$(COMPOSE) restart
 
 logs: ## View logs from all services
-	docker-compose logs -f
+	$(COMPOSE) logs -f
 
 logs-backend: ## View backend logs
-	docker-compose logs -f backend
+	$(COMPOSE) logs -f backend
 
 logs-frontend: ## View frontend logs
-	docker-compose logs -f frontend
+	$(COMPOSE) logs -f frontend
 
 logs-mongodb: ## View MongoDB logs
-	docker-compose logs -f mongodb
+	$(COMPOSE) logs -f mongodb
 
 ps: ## Show running containers
-	docker-compose ps
+	$(COMPOSE) ps
 
 clean: ## Stop services and remove volumes (⚠️ deletes data)
-	docker-compose down -v
+	$(COMPOSE) down -v
 
 clean-all: clean ## Stop services, remove volumes and images
-	docker-compose down -v --rmi all
+	$(COMPOSE) down -v --rmi all
 
 rebuild: ## Rebuild and restart all services
-	docker-compose up -d --build
+	$(COMPOSE) up -d --build
 
 backup: ## Backup MongoDB data
 	@echo "Creating MongoDB backup..."
-	docker-compose exec -T mongodb mongodump --archive > backup_$(shell date +%Y%m%d_%H%M%S).archive
+	$(COMPOSE) exec -T mongodb mongodump --archive > backup_$(shell date +%Y%m%d_%H%M%S).archive
 	@echo "Backup created: backup_$(shell date +%Y%m%d_%H%M%S).archive"
 
 restore: ## Restore MongoDB from backup (usage: make restore BACKUP=backup_file.archive)
@@ -53,19 +56,49 @@ restore: ## Restore MongoDB from backup (usage: make restore BACKUP=backup_file.
 		exit 1; \
 	fi
 	@echo "Restoring from $(BACKUP)..."
-	cat $(BACKUP) | docker-compose exec -T mongodb mongorestore --archive
+	cat $(BACKUP) | $(COMPOSE) exec -T mongodb mongorestore --archive
 	@echo "Restore completed"
 
 shell-backend: ## Open shell in backend container
-	docker-compose exec backend /bin/bash
+	$(COMPOSE) exec backend /bin/bash
 
 shell-mongodb: ## Open MongoDB shell
-	docker-compose exec mongodb mongosh
+	$(COMPOSE) exec mongodb mongosh
 
 status: ## Check health status of all services
-	docker-compose ps
+	$(COMPOSE) ps
 	@echo ""
 	@echo "Health checks:"
-	@docker-compose exec -T backend curl -s http://localhost:8002/api/health || echo "Backend: Unhealthy"
-	@docker-compose exec -T frontend wget -q -O- http://localhost/health || echo "Frontend: Unhealthy"
+	@$(COMPOSE) exec -T backend curl -s http://localhost:8002/api/health || echo "Backend: Unhealthy"
+	@$(COMPOSE) exec -T frontend wget -q -O- http://localhost/health || echo "Frontend: Unhealthy"
 
+# Production targets
+prod-build: COMPOSE_FILE = docker-compose.prod.yml
+prod-build: ## Build production images
+	$(COMPOSE) build
+
+prod-up: COMPOSE_FILE = docker-compose.prod.yml
+prod-up: ## Start production services
+	$(COMPOSE) up -d
+
+prod-down: COMPOSE_FILE = docker-compose.prod.yml
+prod-down: ## Stop production services
+	$(COMPOSE) down
+
+prod-restart: COMPOSE_FILE = docker-compose.prod.yml
+prod-restart: ## Restart production services
+	$(COMPOSE) restart
+
+prod-logs: COMPOSE_FILE = docker-compose.prod.yml
+prod-logs: ## View production logs
+	$(COMPOSE) logs -f
+
+prod-rebuild: COMPOSE_FILE = docker-compose.prod.yml
+prod-rebuild: ## Rebuild and restart production services
+	$(COMPOSE) up -d --build
+
+test: ## Run backend tests
+	$(COMPOSE) exec backend pytest
+
+test-coverage: ## Run tests with coverage
+	$(COMPOSE) exec backend pytest --cov=. --cov-report=html

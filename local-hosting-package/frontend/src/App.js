@@ -25,6 +25,7 @@ import LoginPage from "./pages/LoginPage";
 import UserManagement from "./pages/UserManagement";
 import { Toaster } from "@/components/ui/sonner";
 import { getBackendUrl } from "@/lib/backend";
+import AppBootScreen from "@/components/AppBootScreen";
 
 const BACKEND_URL = getBackendUrl();
 const BACKEND_ORIGIN = (() => {
@@ -146,7 +147,7 @@ function App() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-screen"><div className="loading-spinner" /></div>;
+    return <AppBootScreen subtitle="Starting dashboard services…" />;
   }
 
   return (

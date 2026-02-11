@@ -222,7 +222,7 @@ def generate_block_code(district_code: str, block_name: str) -> str:
     return f"{district_code}{hash_val}"
 
 # ============= DATA ACCESS FUNCTIONS =============
-
+7
 async def get_data_from_db() -> bool:
     """Check if we have imported data in the database"""
     count = await db.schools.count_documents({})
@@ -717,20 +717,125 @@ async def get_schools(
 @api_router.get("/schools/{udise_code}", response_model=SchoolDetail)
 async def get_school_detail(udise_code: str):
     """Get detailed information for a specific school"""
-    has_data = await get_data_from_db()
+    # Always check analytics collections first, regardless of has_data
+    # This ensures we get real school names even if schools collection is empty
+    school_name = None
+    district_name = None
+    block_name = None
+    district_code = None
+    block_code = None
+    infra_doc = None
+    aadhaar_doc = None
     
+    # Try infrastructure_analytics first (most reliable)
+    infra_doc = await db.infrastructure_analytics.find_one(
+        {"udise_code": udise_code},
+        {"school_name": 1, "district_name": 1, "block_name": 1, "district_code": 1, "block_code": 1, "_id": 0}
+    )
+    if infra_doc:
+        school_name = infra_doc.get("school_name")
+        district_name = infra_doc.get("district_name")
+        block_name = infra_doc.get("block_name")
+        district_code = infra_doc.get("district_code")
+        block_code = infra_doc.get("block_code")
+    
+    # If not found, try aadhaar_analytics
+    if not school_name:
+        aadhaar_doc = await db.aadhaar_analytics.find_one(
+            {"udise_code": udise_code},
+            {"school_name": 1, "district_name": 1, "block_name": 1, "district_code": 1, "block_code": 1, "total_enrolment": 1, "aadhaar_enrolled": 1, "apaar_enrolled": 1, "_id": 0}
+        )
+        if aadhaar_doc:
+            school_name = aadhaar_doc.get("school_name")
+            if not district_name:
+                district_name = aadhaar_doc.get("district_name")
+            if not block_name:
+                block_name = aadhaar_doc.get("block_name")
+            if not district_code:
+                district_code = aadhaar_doc.get("district_code")
+            if not block_code:
+                block_code = aadhaar_doc.get("block_code")
+    
+    # Now check schools collection
+    has_data = await get_data_from_db()
+    doc = None
     if has_data:
         doc = await db.schools.find_one({"udise_code": udise_code}, {"_id": 0})
+        
+        # Fallback to schools collection if still not found
+        if not school_name and doc:
+            school_name = doc.get("school_name", "")
+            # Check if it's a generic name
+            if school_name and (school_name.startswith("SCHOOL ") or school_name == "Unknown School"):
+                school_name = None
+        
+        # Use schools collection for district/block if still missing
+        if doc:
+            if not district_name:
+                district_name = doc.get("district_name", "")
+            if not block_name:
+                block_name = doc.get("block_name", "")
+            if not district_code:
+                district_code = doc.get("district_code", "")
+            if not block_code:
+                block_code = doc.get("block_code", "")
+        
+        # Final fallback for school name
+        if not school_name:
+            if doc:
+                school_name = doc.get("school_name", "Unknown School")
+            else:
+                school_name = "Unknown School"
+        
+        # Get data from schools collection if available, otherwise use defaults
         if doc:
             total_students = doc.get("total_students", 0)
-            total_teachers = doc.get("total_teachers", 1)
+            total_teachers = doc.get("total_teachers", 0)  # Use actual count, default to 0 not 1
             classrooms = doc.get("classrooms", 1)
-            ptr = round(total_students / max(total_teachers, 1), 1)
+            # Calculate PTR - use 1 as divisor if no teachers to avoid division by zero, but show actual count
+            ptr = round(total_students / max(total_teachers, 1), 1) if total_students > 0 else 0.0
             students_per_classroom = round(total_students / max(classrooms, 1), 1)
             
+            # ALWAYS try to get Aadhaar/APAAR percentages from analytics collections first
+            # Analytics collections are the source of truth
+            aadhaar_pct = 0.0
+            apaar_pct = 0.0
+            
+            # Get Aadhaar data from analytics
+            if not aadhaar_doc:
+                aadhaar_doc = await db.aadhaar_analytics.find_one(
+                    {"udise_code": udise_code},
+                    {"total_enrolment": 1, "aadhaar_passed": 1, "_id": 0}
+                )
+            if aadhaar_doc:
+                total = aadhaar_doc.get("total_enrolment", 0)
+                aadhaar_passed = aadhaar_doc.get("aadhaar_passed", 0)
+                if total > 0:
+                    aadhaar_pct = round((aadhaar_passed / total) * 100, 1)
+                # Update total_students from analytics if available and doc has 0
+                if total_students == 0 and total > 0:
+                    total_students = total
+            
+            # Get APAAR data from analytics
+            apaar_doc = await db.apaar_analytics.find_one(
+                {"udise_code": udise_code},
+                {"total_student": 1, "total_students": 1, "total_generated": 1, "_id": 0}
+            )
+            if apaar_doc:
+                total_apaar = apaar_doc.get("total_student", 0) or apaar_doc.get("total_students", 0)
+                apaar_generated = apaar_doc.get("total_generated", 0)
+                if total_apaar > 0:
+                    apaar_pct = round((apaar_generated / total_apaar) * 100, 1)
+            
+            # Fallback to doc values only if analytics don't have data
+            if aadhaar_pct == 0.0:
+                aadhaar_pct = doc.get("aadhaar_percentage", 0.0)
+            if apaar_pct == 0.0:
+                apaar_pct = doc.get("apaar_percentage", 0.0)
+            
             shi = calculate_shi({
-                "aadhaar_percentage": doc.get("aadhaar_percentage", 0),
-                "apaar_percentage": doc.get("apaar_percentage", 0),
+                "aadhaar_percentage": aadhaar_pct,
+                "apaar_percentage": apaar_pct,
                 "water_available": doc.get("water_available", True),
                 "toilets_available": doc.get("toilets_available", True),
                 "students_per_classroom": students_per_classroom,
@@ -738,26 +843,115 @@ async def get_school_detail(udise_code: str):
                 "certified": doc.get("certified", False)
             })
             
+            # Use school_name from analytics if available, otherwise use from doc
+            final_school_name = school_name if school_name and school_name != "Unknown School" and not school_name.startswith("SCHOOL ") else doc.get("school_name", "Unknown School")
+            
             return SchoolDetail(
                 udise_code=doc.get("udise_code", udise_code),
-                school_name=doc.get("school_name", "Unknown School"),
-                district_code=doc.get("district_code", ""),
-                district_name=doc.get("district_name", ""),
-                block_code=doc.get("block_code", ""),
-                block_name=doc.get("block_name", ""),
+                school_name=final_school_name,
+                district_code=district_code or doc.get("district_code", ""),
+                district_name=district_name or "",
+                block_code=block_code or doc.get("block_code", ""),
+                block_name=block_name or "",
                 school_category=doc.get("school_category"),
                 school_management=doc.get("school_management"),
                 total_students=total_students,
                 total_teachers=total_teachers,
                 ptr=ptr,
-                aadhaar_percentage=doc.get("aadhaar_percentage", 0.0),
-                apaar_percentage=doc.get("apaar_percentage", 0.0),
+                aadhaar_percentage=aadhaar_pct,
+                apaar_percentage=apaar_pct,
                 water_available=doc.get("water_available", True),
                 toilets_available=doc.get("toilets_available", True),
                 classrooms=classrooms,
                 students_per_classroom=students_per_classroom,
                 data_entry_status=doc.get("data_entry_status", "pending"),
                 certified=doc.get("certified", False),
+                shi_score=shi,
+                rag_status=get_rag_status(shi)
+            )
+    
+    # School exists in analytics but not in schools collection
+    # This check happens OUTSIDE the has_data block so it works even if schools collection is empty
+    if school_name and school_name != "Unknown School" and not school_name.startswith("SCHOOL "):
+            # School exists in analytics but not in schools collection
+            # Get student count from aadhaar_analytics (reuse the doc we already fetched)
+            if not aadhaar_doc:
+                aadhaar_doc = await db.aadhaar_analytics.find_one(
+                    {"udise_code": udise_code},
+                    {"total_enrolment": 1, "aadhaar_passed": 1, "_id": 0}
+                )
+            total_students = aadhaar_doc.get("total_enrolment", 0) if aadhaar_doc else 0
+            
+            # Get teacher count from ctteacher_analytics
+            teacher_count = await db.ctteacher_analytics.count_documents({"udise_code": udise_code})
+            total_teachers = teacher_count  # Use actual count, don't force to 1
+            
+            # Get infrastructure data (reuse infra_doc if already fetched)
+            if not infra_doc:
+                infra_doc = await db.infrastructure_analytics.find_one(
+                    {"udise_code": udise_code},
+                    {"classrooms": 1, "tap_water": 1, "toilets": 1, "_id": 0}
+                )
+            classrooms = infra_doc.get("classrooms", 1) if infra_doc else 1
+            water_available = infra_doc.get("tap_water") == "yes" if infra_doc else True
+            toilets_available = infra_doc.get("toilets", 0) > 0 if infra_doc else True
+            
+            # Calculate PTR - use 1 as divisor if no teachers to avoid division by zero, but show actual count
+            ptr = round(total_students / max(total_teachers, 1), 1) if total_students > 0 else 0.0
+            students_per_classroom = round(total_students / max(classrooms, 1), 1)
+            
+            # Get Aadhaar/APAAR percentages
+            aadhaar_pct = 0.0
+            apaar_pct = 0.0
+            if aadhaar_doc:
+                total = aadhaar_doc.get("total_enrolment", 0)
+                # Use correct field name: aadhaar_passed (not aadhaar_enrolled)
+                aadhaar_passed = aadhaar_doc.get("aadhaar_passed", 0)
+                if total > 0:
+                    aadhaar_pct = round((aadhaar_passed / total) * 100, 1)
+            
+            # Get APAAR data from apaar_analytics collection
+            apaar_doc = await db.apaar_analytics.find_one(
+                {"udise_code": udise_code},
+                {"total_student": 1, "total_students": 1, "total_generated": 1, "_id": 0}
+            )
+            if apaar_doc:
+                # Try both field names (total_student and total_students)
+                total_apaar = apaar_doc.get("total_student", 0) or apaar_doc.get("total_students", 0)
+                apaar_generated = apaar_doc.get("total_generated", 0)
+                if total_apaar > 0:
+                    apaar_pct = round((apaar_generated / total_apaar) * 100, 1)
+            
+            shi = calculate_shi({
+                "aadhaar_percentage": aadhaar_pct,
+                "apaar_percentage": apaar_pct,
+                "water_available": water_available,
+                "toilets_available": toilets_available,
+                "students_per_classroom": students_per_classroom,
+                "ptr": ptr,
+                "certified": False
+            })
+            
+            return SchoolDetail(
+                udise_code=udise_code,
+                school_name=school_name,
+                district_code=district_code or "",
+                district_name=district_name or "",
+                block_code=block_code or "",
+                block_name=block_name or "",
+                school_category=None,
+                school_management=None,
+                total_students=total_students,
+                total_teachers=total_teachers,
+                ptr=ptr,
+                aadhaar_percentage=aadhaar_pct,
+                apaar_percentage=apaar_pct,
+                water_available=water_available,
+                toilets_available=toilets_available,
+                classrooms=classrooms,
+                students_per_classroom=students_per_classroom,
+                data_entry_status="pending",
+                certified=False,
                 shi_score=shi,
                 rag_status=get_rag_status(shi)
             )
@@ -927,6 +1121,12 @@ from routers.scope import router as scope_router, init_db as init_scope_db
 
 # Initialize all routers with database
 init_auth_db(db)
+# Verify auth router db is initialized
+from routers.auth import db as auth_db_check
+if auth_db_check is None:
+    print("WARNING: Auth router database not initialized!")
+else:
+    print(f"✅ Auth router database initialized: {auth_db_check.name}")
 init_export_db(db)
 init_analytics_db(db)
 init_aadhaar_db(db, UPLOADS_DIR)

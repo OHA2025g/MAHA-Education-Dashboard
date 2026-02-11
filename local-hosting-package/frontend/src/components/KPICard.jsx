@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import MetricInfoButton from "./MetricInfoButton";
 
 const KPICard = ({ 
   label, 
@@ -10,7 +11,8 @@ const KPICard = ({
   icon: Icon,
   className,
   onClick,
-  testId
+  testId,
+  metricKey = null
 }) => {
   const getTrendIcon = () => {
     if (trend === "up") return <TrendingUp className="w-4 h-4 text-emerald-500" />;
@@ -35,7 +37,16 @@ const KPICard = ({
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="kpi-label mb-2">{label}</p>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="kpi-label">{label}</p>
+            {metricKey && (
+              <MetricInfoButton 
+                metricKey={metricKey}
+                variant="ghost"
+                size="sm"
+              />
+            )}
+          </div>
           <div className="flex items-baseline gap-2">
             <span className="kpi-value">
               {typeof value === 'number' ? value.toLocaleString('en-IN') : value}

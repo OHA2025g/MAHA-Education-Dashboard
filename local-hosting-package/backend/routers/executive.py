@@ -201,7 +201,7 @@ async def get_infrastructure_facilities(
             "functional_toilets": {"$sum": {"$add": ["$boys_toilets_functional", "$girls_toilets_functional"]}},
             "toilets_with_water": {"$sum": {"$add": ["$boys_toilets_functional", "$girls_toilets_functional"]}},
             "handwash_points": {"$sum": "$handwash_points"},
-            "schools_with_electricity": {"$sum": {"$cond": [{"$gt": ["$electricity_available", 0]}, 1, 0]}},
+            "schools_with_electricity": {"$sum": {"$cond": [{"$or": [{"$eq": ["$electricity", 1]}, {"$eq": ["$electricity", "1"]}, {"$gt": ["$electricity", 0]}]}, 1, 0]}},
             "schools_with_library": {"$sum": {"$cond": [{"$gt": ["$library_available", 0]}, 1, 0]}},
             "computer_labs": {"$sum": "$computer_labs"}
         }}
@@ -214,10 +214,10 @@ async def get_infrastructure_facilities(
         {"$group": {
             "_id": None,
             "total_schools": {"$sum": 1},
-            "tap_water": {"$sum": {"$cond": [{"$gt": ["$drinking_water_available", 0]}, 1, 0]}},
-            "purified_water": {"$sum": {"$cond": [{"$gt": ["$drinking_water_functional", 0]}, 1, 0]}},
-            "water_tested": {"$sum": {"$cond": [{"$gt": ["$drinking_water_available", 0]}, 1, 0]}},
-            "rainwater_harvest": {"$sum": {"$cond": [{"$gt": ["$rain_water_harvesting", 0]}, 1, 0]}},
+            "tap_water": {"$sum": {"$cond": [{"$or": [{"$eq": ["$tap_water", "yes"]}, {"$eq": ["$tap_water", 1]}, {"$gt": [{"$ifNull": ["$tap_water", 0]}, 0]}]}, 1, 0]}},
+            "purified_water": {"$sum": {"$cond": [{"$or": [{"$eq": ["$water_purification", "yes"]}, {"$eq": ["$water_purifier", 1]}, {"$gt": [{"$ifNull": ["$water_purifier", 0]}, 0]}]}, 1, 0]}},
+            "water_tested": {"$sum": {"$cond": [{"$or": [{"$eq": ["$water_testing", "yes"]}, {"$eq": ["$water_quality_tested", 1]}, {"$gt": [{"$ifNull": ["$water_quality_tested", 0]}, 0]}]}, 1, 0]}},
+            "rainwater_harvest": {"$sum": {"$cond": [{"$or": [{"$eq": ["$rainwater_harvesting", "yes"]}, {"$and": [{"$ne": ["$rainwater_harvesting", "no"]}, {"$ne": ["$rainwater_harvesting", None]}, {"$ne": ["$rainwater_harvesting", ""]}]}, {"$gt": [{"$ifNull": ["$rain_water_harvesting", 0]}, 0]}]}, 1, 0]}},
             "ramp_available": {"$sum": {"$cond": [{"$eq": ["$ramp", True]}, 1, 0]}},
             "medical_checkup": {"$sum": {"$cond": [{"$eq": ["$medical_checkup", True]}, 1, 0]}},
             "first_aid": {"$sum": {"$cond": [{"$eq": ["$first_aid", True]}, 1, 0]}}
@@ -270,10 +270,11 @@ async def get_infrastructure_facilities(
     water_availability = round(toilets_with_water / functional_toilets * 100, 1) if functional_toilets > 0 else 0
     electricity_pct = round(ct.get("schools_with_electricity", 0) / total_schools * 100, 1) if total_schools > 0 else 0
     
-    # Water safety metrics
-    tap_water_pct = round(inf.get("tap_water", 0) / inf.get("total_schools", 1) * 100, 1)
-    purified_water_pct = round(inf.get("purified_water", 0) / inf.get("total_schools", 1) * 100, 1)
-    water_tested_pct = round(inf.get("water_tested", 0) / inf.get("total_schools", 1) * 100, 1)
+    # Water safety metrics - use total_schools from infrastructure_analytics or fallback to classrooms_toilets
+    infra_total_schools = inf.get("total_schools", 0) or total_schools or 1
+    tap_water_pct = round(inf.get("tap_water", 0) / infra_total_schools * 100, 1) if infra_total_schools > 0 else 0
+    purified_water_pct = round(inf.get("purified_water", 0) / infra_total_schools * 100, 1) if infra_total_schools > 0 else 0
+    water_tested_pct = round(inf.get("water_tested", 0) / infra_total_schools * 100, 1) if infra_total_schools > 0 else 0
     
     # Infrastructure Readiness Index = (Classroom Health * 0.3 + Toilet Functional * 0.25 + Water * 0.25 + Electricity * 0.2)
     infrastructure_index = round(classroom_health * 0.3 + toilet_functional * 0.25 + water_availability * 0.25 + electricity_pct * 0.2, 1)
@@ -310,7 +311,7 @@ async def get_infrastructure_facilities(
             "tap_water_pct": tap_water_pct,
             "purified_water_pct": purified_water_pct,
             "water_tested_pct": water_tested_pct,
-            "rainwater_harvest_pct": round(inf.get("rainwater_harvest", 0) / inf.get("total_schools", 1) * 100, 1)
+            "rainwater_harvest_pct": round(inf.get("rainwater_harvest", 0) / infra_total_schools * 100, 1) if infra_total_schools > 0 else 0
         },
         "health_safety": {
             "medical_checkup_pct": round(inf.get("medical_checkup", 0) / inf.get("total_schools", 1) * 100, 1),
@@ -351,11 +352,14 @@ async def get_teacher_staffing(
             "total_records": {"$sum": 1},
             "unique_teachers": {"$addToSet": "$teacher_code"},
             "total_schools": {"$addToSet": "$udise_code"},
-            "aadhaar_verified": {"$sum": {"$cond": [{"$eq": ["$aadhaar_verified", 1]}, 1, 0]}},
+            "aadhaar_verified": {"$sum": {"$cond": [{"$eq": ["$aadhaar_verified", "Verified From UIDAI against Name,Gender & DOB"]}, 1, 0]}},
             "ctet_qualified": {"$sum": {"$cond": [{"$eq": ["$ctet_qualified", 1]}, 1, 0]}},
             "nishtha_completed": {"$sum": {"$cond": [{"$eq": ["$training_nishtha", 1]}, 1, 0]}},
-            "female_count": {"$sum": {"$cond": [{"$regexMatch": {"input": "$gender", "regex": "Female|2-"}}, 1, 0]}},
-            "male_count": {"$sum": {"$cond": [{"$regexMatch": {"input": "$gender", "regex": "Male|1-"}}, 1, 0]}}
+            "female_count": {"$sum": {"$cond": [{"$or": [{"$eq": ["$gender", "2-Female"]}, {"$eq": ["$gender", "Female"]}, {"$regexMatch": {"input": {"$toString": "$gender"}, "regex": "Female|2-"}}]}, 1, 0]}},
+            "male_count": {"$sum": {"$cond": [{"$or": [{"$eq": ["$gender", "1-Male"]}, {"$eq": ["$gender", "Male"]}, {"$regexMatch": {"input": {"$toString": "$gender"}, "regex": "Male|1-"}}]}, 1, 0]}},
+            "retirement_risk": {"$sum": {"$cond": [{"$gte": ["$age", 55]}, 1, 0]}},
+            "total_age": {"$sum": "$age"},
+            "total_service_years": {"$sum": "$service_years"}
         }}
     ], scope_match)
     ct_cursor = db.ctteacher_analytics.aggregate(ct_pipeline)
@@ -410,25 +414,124 @@ async def get_teacher_staffing(
     unique_teachers = len(unique_teachers_list) if unique_teachers_list else 0
     total_schools = len(ct.get("total_schools", [])) if ct.get("total_schools") else 0
     
-    # Use unique_teachers as the primary count to match CTTeacher dashboard
-    # But use total_records for percentage calculations (as CTTeacher dashboard does)
-    total_teachers = unique_teachers if unique_teachers > 0 else total_records
+    # Use teachers_cy from teacher_analytics to match Teacher Dashboard "Total Teachers (CY)"
+    # This ensures consistency across dashboards
+    teachers_cy = t.get("teachers_cy", 0) or 0
+    teachers_py = t.get("teachers_py", 0) or 0
+    
+    # Use teachers_cy as primary count to match Teacher Dashboard
+    # Fallback to unique_teachers if teacher_analytics doesn't have data
+    total_teachers = teachers_cy if teachers_cy > 0 else (unique_teachers if unique_teachers > 0 else total_records)
     
     # Calculate KPIs using total_records for percentages (matching CTTeacher dashboard logic)
     aadhaar_verified_pct = round(ct.get("aadhaar_verified", 0) / total_records * 100, 1) if total_records > 0 else 0
     ctet_pct = round(ct.get("ctet_qualified", 0) / total_records * 100, 1) if total_records > 0 else 0
     nishtha_pct = round(ct.get("nishtha_completed", 0) / total_records * 100, 1) if total_records > 0 else 0
     female_pct = round(ct.get("female_count", 0) / total_records * 100, 1) if total_records > 0 else 0
-    avg_service_years = 13.6  # Estimated - not available directly in data
-    retirement_risk_pct = 8.0  # Estimated - would need age calculation from DOB
     
-    # Teacher growth
-    teachers_cy = t.get("teachers_cy", 0)
-    teachers_py = t.get("teachers_py", 0)
+    # Calculate retirement risk: Teachers aged 55+ (retirement age in India is typically 58-60, but 55+ indicates high risk)
+    retirement_risk_count = ct.get("retirement_risk", 0)
+    retirement_risk_pct = round(retirement_risk_count / total_records * 100, 1) if total_records > 0 else 0
+    
+    # Calculate average service years from aggregated data
+    total_service_years = ct.get("total_service_years", 0)
+    avg_service_years = round(total_service_years / total_records, 1) if total_records > 0 else 0
+    
+    # Teacher growth (teachers_cy and teachers_py already calculated above)
     growth_rate = round((teachers_cy - teachers_py) / teachers_py * 100, 1) if teachers_py > 0 else 0
     
     # Teacher Quality Index = (CTET * 0.4 + NISHTHA * 0.3 + Aadhaar Verified * 0.3)
     teacher_quality_index = round(ctet_pct * 0.4 + nishtha_pct * 0.3 + aadhaar_verified_pct * 0.3, 1)
+    
+    # Professional Qualification Distribution (run after total_records is calculated)
+    prof_qual_pipeline = prepend_match([
+        {"$group": {
+            "_id": "$professional_qualification",
+            "count": {"$sum": 1}
+        }},
+        {"$project": {
+            "_id": 0,
+            "qualification": "$_id",
+            "count": 1
+        }},
+        {"$sort": {"count": -1}}
+    ], scope_match)
+    prof_qual_cursor = db.ctteacher_analytics.aggregate(prof_qual_pipeline)
+    prof_qual_data = await prof_qual_cursor.to_list(length=20)
+    # Calculate percentages manually after getting total_records
+    for item in prof_qual_data:
+        item["percentage"] = round(item["count"] / total_records * 100, 1) if total_records > 0 else 0
+    
+    # Academic Qualification Distribution (run after total_records is calculated)
+    acad_qual_pipeline = prepend_match([
+        {"$group": {
+            "_id": "$academic_qualification",
+            "count": {"$sum": 1}
+        }},
+        {"$project": {
+            "_id": 0,
+            "qualification": "$_id",
+            "count": 1
+        }},
+        {"$sort": {"count": -1}}
+    ], scope_match)
+    acad_qual_cursor = db.ctteacher_analytics.aggregate(acad_qual_pipeline)
+    acad_qual_data = await acad_qual_cursor.to_list(length=20)
+    # Calculate percentages manually after getting total_records
+    for item in acad_qual_data:
+        item["percentage"] = round(item["count"] / total_records * 100, 1) if total_records > 0 else 0
+    
+    # Calculate summary KPIs for qualifications
+    b_ed_or_higher_count = sum(item["count"] for item in prof_qual_data if item.get("qualification") and ("B.Ed" in str(item["qualification"]) or "M.Ed" in str(item["qualification"])))
+    post_graduate_count = sum(item["count"] for item in acad_qual_data if item.get("qualification") and ("Post graduate" in str(item["qualification"]) or "M.Phil" in str(item["qualification"]) or "Ph.D" in str(item["qualification"]) or "Post Doctoral" in str(item["qualification"])))
+    
+    # Count schools by number of teachers (0, 1, 2 teachers)
+    school_teacher_count_pipeline = prepend_match([
+        {"$group": {
+            "_id": "$udise_code",
+            "teacher_count": {"$sum": 1}
+        }},
+        {"$group": {
+            "_id": "$teacher_count",
+            "school_count": {"$sum": 1}
+        }},
+        {"$sort": {"_id": 1}}
+    ], scope_match)
+    school_teacher_cursor = db.ctteacher_analytics.aggregate(school_teacher_count_pipeline)
+    school_teacher_data = await school_teacher_cursor.to_list(length=100)
+    
+    # Initialize counts
+    one_teacher_schools = 0
+    two_teacher_schools = 0
+    
+    # Process the aggregated data
+    for item in school_teacher_data:
+        teacher_count = item.get("_id", 0)
+        school_count = item.get("school_count", 0)
+        if teacher_count == 1:
+            one_teacher_schools = school_count
+        elif teacher_count == 2:
+            two_teacher_schools = school_count
+    
+    # Count schools with zero teachers (schools not in ctteacher_analytics)
+    # Get all unique schools from ctteacher_analytics
+    schools_query = scope_match if scope_match else {}
+    schools_with_teachers_list = await db.ctteacher_analytics.distinct("udise_code", schools_query)
+    schools_with_teachers_count = len(schools_with_teachers_list) if schools_with_teachers_list else 0
+    
+    # Get total schools in scope - use infrastructure_analytics to get all schools
+    total_schools_pipeline = prepend_match([
+        {"$group": {
+            "_id": None,
+            "total_schools": {"$addToSet": "$udise_code"}
+        }}
+    ], scope_match)
+    total_schools_cursor = db.infrastructure_analytics.aggregate(total_schools_pipeline)
+    total_schools_data = await total_schools_cursor.to_list(length=1)
+    total_schools_all = len(total_schools_data[0].get("total_schools", [])) if total_schools_data and total_schools_data[0] else total_schools
+    
+    # Schools with zero teachers = total schools - schools with at least 1 teacher
+    zero_teacher_schools = max(0, total_schools_all - schools_with_teachers_count)
     
     return {
         "summary": {
@@ -455,7 +558,7 @@ async def get_teacher_staffing(
             "avg_service_years": avg_service_years
         },
         "risk_metrics": {
-            "retirement_risk_count": ct.get("retirement_risk", 0),
+            "retirement_risk_count": retirement_risk_count,
             "retirement_risk_pct": retirement_risk_pct,
             "growth_rate": growth_rate,
             "teachers_cy": teachers_cy,
@@ -480,7 +583,143 @@ async def get_teacher_staffing(
                 "nishtha_pct": round(b.get("nishtha_pct", 0) or 0, 1),
             }
             for b in block_data
-        ]
+        ],
+        "qualification_metrics": {
+            "professional_qualification_distribution": prof_qual_data,
+            "academic_qualification_distribution": acad_qual_data,
+            "top_professional_qualification": prof_qual_data[0] if prof_qual_data else None,
+            "top_academic_qualification": acad_qual_data[0] if acad_qual_data else None,
+            "b_ed_or_higher_pct": round(b_ed_or_higher_count / total_records * 100, 1) if total_records > 0 else 0,
+            "post_graduate_pct": round(post_graduate_count / total_records * 100, 1) if total_records > 0 else 0
+        },
+        "school_teacher_distribution": {
+            "zero_teacher_schools": zero_teacher_schools,
+            "one_teacher_schools": one_teacher_schools,
+            "two_teacher_schools": two_teacher_schools,
+            "total_schools": total_schools_all
+        }
+    }
+
+
+@router.get("/schools-by-teacher-count")
+async def get_schools_by_teacher_count(
+    teacher_count: int = Query(..., description="Number of teachers: 0, 1, or 2"),
+    district_code: Optional[str] = Query(None),
+    block_code: Optional[str] = Query(None),
+    udise_code: Optional[str] = Query(None),
+    limit: int = Query(100, description="Maximum number of schools to return"),
+):
+    """Get list of schools with specified number of teachers, including student counts"""
+    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code)
+    
+    if teacher_count == 0:
+        # Schools with zero teachers - schools not in ctteacher_analytics
+        schools_query = scope_match if scope_match else {}
+        schools_with_teachers_list = await db.ctteacher_analytics.distinct("udise_code", schools_query)
+        schools_with_teachers = set(schools_with_teachers_list) if schools_with_teachers_list else set()
+        
+        # Get all schools in scope from infrastructure_analytics
+        total_schools_pipeline = prepend_match([
+            {"$group": {
+                "_id": "$udise_code",
+                "school_name": {"$first": "$school_name"},
+                "block_name": {"$first": "$block_name"},
+                "block_code": {"$first": "$block_code"},
+                "district_name": {"$first": "$district_name"},
+                "district_code": {"$first": "$district_code"}
+            }}
+        ], scope_match)
+        total_schools_cursor = db.infrastructure_analytics.aggregate(total_schools_pipeline)
+        all_schools = await total_schools_cursor.to_list(length=10000)
+        
+        # Filter to get schools with zero teachers
+        zero_teacher_schools = [s for s in all_schools if s.get("_id") not in schools_with_teachers]
+        
+        # Get student counts from aadhaar_analytics
+        schools_list = []
+        for school in zero_teacher_schools[:limit]:
+            udise = school.get("_id")
+            # Get student count from aadhaar_analytics
+            student_data = await db.aadhaar_analytics.find_one(
+                {"udise_code": udise},
+                {"total_enrolment": 1}
+            )
+            student_count = student_data.get("total_enrolment", 0) if student_data else 0
+            
+            schools_list.append({
+                "udise_code": udise,
+                "school_name": school.get("school_name", ""),
+                "block_name": school.get("block_name", ""),
+                "block_code": school.get("block_code", ""),
+                "district_name": school.get("district_name", ""),
+                "district_code": school.get("district_code", ""),
+                "teacher_count": 0,
+                "student_count": student_count
+            })
+        
+        return {
+            "teacher_count": 0,
+            "total_schools": len(zero_teacher_schools),
+            "schools": sorted(schools_list, key=lambda x: x["student_count"], reverse=True)
+        }
+    
+    else:
+        # Schools with 1 or 2 teachers - from ctteacher_analytics
+        school_teacher_pipeline = prepend_match([
+            {"$group": {
+                "_id": "$udise_code",
+                "teacher_count": {"$sum": 1},
+                "school_name": {"$first": "$school_name"},
+                "block_name": {"$first": "$block_name"},
+                "block_code": {"$first": "$block_code"},
+                "district_name": {"$first": "$district_name"},
+                "district_code": {"$first": "$district_code"}
+            }},
+            {"$match": {"teacher_count": teacher_count}},
+            {"$limit": limit}
+        ], scope_match)
+        school_teacher_cursor = db.ctteacher_analytics.aggregate(school_teacher_pipeline)
+        school_teacher_data = await school_teacher_cursor.to_list(length=limit)
+        
+        # Get student counts from aadhaar_analytics
+        schools_list = []
+        for school in school_teacher_data:
+            udise = school.get("_id")
+            # Get student count from aadhaar_analytics
+            student_data = await db.aadhaar_analytics.find_one(
+                {"udise_code": udise},
+                {"total_enrolment": 1}
+            )
+            student_count = student_data.get("total_enrolment", 0) if student_data else 0
+            
+            schools_list.append({
+                "udise_code": udise,
+                "school_name": school.get("school_name", ""),
+                "block_name": school.get("block_name", ""),
+                "block_code": school.get("block_code", ""),
+                "district_name": school.get("district_name", ""),
+                "district_code": school.get("district_code", ""),
+                "teacher_count": teacher_count,
+                "student_count": student_count
+            })
+        
+        # Get total count
+        total_count_pipeline = prepend_match([
+            {"$group": {
+                "_id": "$udise_code",
+                "teacher_count": {"$sum": 1}
+            }},
+            {"$match": {"teacher_count": teacher_count}},
+            {"$count": "total"}
+        ], scope_match)
+        total_count_cursor = db.ctteacher_analytics.aggregate(total_count_pipeline)
+        total_count_data = await total_count_cursor.to_list(length=1)
+        total_schools = total_count_data[0].get("total", len(schools_list)) if total_count_data else len(schools_list)
+        
+        return {
+            "teacher_count": teacher_count,
+            "total_schools": total_schools,
+            "schools": sorted(schools_list, key=lambda x: x["student_count"], reverse=True)
     }
 
 

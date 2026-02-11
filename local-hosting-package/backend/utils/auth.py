@@ -32,7 +32,22 @@ security = HTTPBearer(auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        # Try passlib verification first
+        return pwd_context.verify(plain_password, hashed_password)
+    except (ValueError, Exception):
+        # Fallback: try direct bcrypt verification
+        try:
+            import bcrypt
+            if isinstance(plain_password, str):
+                plain_password = plain_password.encode('utf-8')
+            if isinstance(hashed_password, str):
+                hashed_password = hashed_password.encode('utf-8')
+            return bcrypt.checkpw(plain_password, hashed_password)
+        except Exception:
+            return False
 
 def get_password_hash(password: str) -> str:
     """Hash a password"""

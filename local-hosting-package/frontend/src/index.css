@@ -125,15 +125,15 @@
     
     /* Sidebar */
     .sidebar {
-        @apply bg-slate-900 text-white w-60 min-h-screen fixed left-0 top-0;
+        @apply bg-gradient-to-b from-slate-950 to-slate-900 text-white w-60 min-h-screen fixed left-0 top-0;
     }
     
     .sidebar-item {
-        @apply flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer;
+        @apply flex items-center gap-3 mx-2 my-1 rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-800/70 hover:text-white transition-colors cursor-pointer;
     }
     
     .sidebar-item.active {
-        @apply bg-slate-800 text-white border-l-2 border-blue-500;
+        @apply bg-slate-800/80 text-white ring-1 ring-blue-500/25;
     }
     
     /* Data Tables */
@@ -224,6 +224,92 @@
     
     .animate-pulse-subtle {
         animation: pulse-subtle 2s ease-in-out infinite;
+    }
+    
+    /* Fade in up animation */
+    @keyframes fade-in-up {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .animate-fade-in-up {
+        animation: fade-in-up 0.6s ease-out forwards;
+    }
+    
+    /* Shimmer animation for skeletons */
+    @keyframes shimmer {
+        0% {
+            background-position: -1000px 0;
+        }
+        100% {
+            background-position: 1000px 0;
+        }
+    }
+    
+    .animate-shimmer {
+        background-size: 1000px 100%;
+        animation: shimmer 2s infinite linear;
+    }
+    
+    /* Ripple effect */
+    @keyframes ripple {
+        0% {
+            transform: scale(0);
+            opacity: 1;
+        }
+        100% {
+            transform: scale(4);
+            opacity: 0;
+        }
+    }
+    
+    .ripple-effect {
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .ripple-effect::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.5);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+    }
+    
+    .ripple-effect:active::after {
+        width: 300px;
+        height: 300px;
+        animation: ripple 0.6s ease-out;
+    }
+    
+    /* Smooth scale on hover */
+    .hover-lift {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .hover-lift:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Glow effect */
+    .glow-on-hover {
+        transition: box-shadow 0.3s ease;
+    }
+    
+    .glow-on-hover:hover {
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
     }
 }
 
