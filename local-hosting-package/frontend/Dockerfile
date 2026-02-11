@@ -20,7 +20,7 @@ RUN yarn install --frozen-lockfile --network-timeout 100000
 COPY . .
 
 # Build arguments for environment variables
-ARG REACT_APP_BACKEND_URL=http://localhost:8002
+ARG REACT_APP_BACKEND_URL=https://schooldashboard.demoapi.agrayianailabs.com
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
 # Build the application
