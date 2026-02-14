@@ -48,9 +48,9 @@ async def login(request: LoginRequest):
     logger = logging.getLogger(__name__)
     
     try:
-    # Use global db, or get_db() if not set
-    database = db if db is not None else get_db()
-    
+        # Use global db, or get_db() if not set
+        database = db if db is not None else get_db()
+        
         # Test database connection first
         try:
             await database.users.find_one({"_id": "connection_test"})
@@ -86,7 +86,7 @@ async def login(request: LoginRequest):
                     # Normalize email to lowercase
                     if user.get("email") != email_lower:
                         await database.users.update_one(
-                            {"id": user["id"]},
+                            {"id": user["id"]} if user.get("id") else {"email": user.get("email")},
                             {"$set": {"email": email_lower, "updated_at": datetime.now(timezone.utc)}}
                         )
                         user["email"] = email_lower
@@ -105,21 +105,21 @@ async def login(request: LoginRequest):
                         break
             except Exception as e:
                 logger.warning(f"User iteration failed: {e}")
-    
-    if not user:
+        
+        if not user:
             logger.warning(f"Login attempt with non-existent email: {email_lower}")
             # Don't reveal if email exists or not for security
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
-    
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password"
+            )
+        
         logger.info(f"User found: {user.get('email')}, role: {user.get('role')}, active: {user.get('is_active')}, has_id: {bool(user.get('id'))}")
         
-    # Get password hash
+        # Get password hash
         hashed_pwd = user.get("hashed_password") or user.get("password") or ""
-    
-    if not hashed_pwd:
+        
+        if not hashed_pwd:
             logger.warning(f"User {email_lower} has no password hash - user_id: {user.get('id')}")
             # Try to fix by creating password hash
             try:
@@ -135,13 +135,13 @@ async def login(request: LoginRequest):
                 hashed_pwd = new_hash
             except Exception as fix_error:
                 logger.error(f"Failed to create password hash: {fix_error}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Incorrect email or password"
-        )
-    
+                )
+        
         # Verify password using multiple methods
-    import bcrypt
+        import bcrypt
         password_valid = False
         password_to_check = request.password
         
@@ -152,10 +152,10 @@ async def login(request: LoginRequest):
                 hash_bytes = hashed_pwd.encode('utf-8')
             else:
                 hash_bytes = hashed_pwd
-        
-        password_valid = bcrypt.checkpw(password_bytes, hash_bytes)
+            
+            password_valid = bcrypt.checkpw(password_bytes, hash_bytes)
             logger.debug(f"Bcrypt verification result: {password_valid}")
-    except Exception as e:
+        except Exception as e:
             logger.debug(f"Bcrypt check failed: {e}")
         
         # Method 2: Passlib verify_password
@@ -172,21 +172,21 @@ async def login(request: LoginRequest):
             # Log hash format for debugging
             if hashed_pwd:
                 logger.debug(f"Hash format check: starts with $2b$ = {hashed_pwd.startswith('$2b$')}")
-    
-    if not password_valid:
+        
+        if not password_valid:
             logger.warning(f"Login attempt with incorrect password for: {email_lower}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
-    
-    if not user.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password"
+            )
+        
+        if not user.get("is_active", True):
             logger.warning(f"Login attempt for inactive account: {email_lower}")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled"
-        )
-    
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is disabled"
+            )
+        
         # Ensure user has required fields
         if not user.get("id"):
             user_id = str(uuid.uuid4())
@@ -197,27 +197,27 @@ async def login(request: LoginRequest):
             user["id"] = user_id
             logger.info(f"Created missing user ID: {user_id}")
         
-    # Create token
-    token_data = {
-        "sub": user["email"],
+        # Create token
+        token_data = {
+            "sub": user["email"],
             "role": user.get("role", "viewer"),
-        "user_id": user["id"],
+            "user_id": user["id"],
             "full_name": user.get("full_name", "User"),
-        "district_code": user.get("district_code")
-    }
-    access_token = create_access_token(token_data)
+            "district_code": user.get("district_code")
+        }
+        access_token = create_access_token(token_data)
         
         logger.info(f"Successful login for user: {user['email']} (role: {user.get('role')}, user_id: {user.get('id')})")
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user["id"],
-            "email": user["email"],
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
                 "full_name": user.get("full_name", "User"),
                 "role": user.get("role", "viewer"),
-            "district_code": user.get("district_code"),
+                "district_code": user.get("district_code"),
                 "permissions": ROLE_PERMISSIONS.get(UserRole(user.get("role", "viewer")), {})
             }
         }
