@@ -21,7 +21,7 @@ COPY . .
 
 # Build arguments for environment variables
 # Default to production URL, can be overridden via docker-compose
-ARG REACT_APP_BACKEND_URL=https://school_dashboard.demo.agrayianailabs.com/api
+ARG REACT_APP_BACKEND_URL=https://schooldashboard.demoapi.agrayianailabs.com
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
 # Build the application
