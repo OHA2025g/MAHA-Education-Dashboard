@@ -44,73 +44,92 @@ def get_db():
 @router.post("/login", response_model=Token)
 async def login(request: LoginRequest):
     """Login with email and password"""
-    # Use global db, or get_db() if not set
-    database = db if db is not None else get_db()
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Find user
-    user = await database.users.find_one({"email": request.email})
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
-    
-    # Get password hash
-    hashed_pwd = user.get("hashed_password", "")
-    
-    if not hashed_pwd:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User has no password hash"
-        )
-    
-    # Verify password using direct bcrypt (bypass passlib issues)
-    import bcrypt
     try:
-        # Ensure both are bytes
-        password_bytes = request.password.encode('utf-8')
-        hash_bytes = hashed_pwd.encode('utf-8') if isinstance(hashed_pwd, str) else hashed_pwd
+        # Use global db, or get_db() if not set
+        database = db if db is not None else get_db()
         
-        password_valid = bcrypt.checkpw(password_bytes, hash_bytes)
-    except Exception as e:
-        # If bcrypt fails, try verify_password as fallback
-        password_valid = verify_password(request.password, hashed_pwd)
-    
-    if not password_valid:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
-    
-    if not user.get("is_active", True):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled"
-        )
-    
-    # Create token
-    token_data = {
-        "sub": user["email"],
-        "role": user["role"],
-        "user_id": user["id"],
-        "full_name": user["full_name"],
-        "district_code": user.get("district_code")
-    }
-    access_token = create_access_token(token_data)
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user["id"],
-            "email": user["email"],
-            "full_name": user["full_name"],
+        # Find user
+        user = await database.users.find_one({"email": request.email})
+        
+        if not user:
+            logger.warning(f"Login attempt with non-existent email: {request.email}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password"
+            )
+        
+        # Get password hash
+        hashed_pwd = user.get("hashed_password", "")
+        
+        if not hashed_pwd:
+            logger.warning(f"User {request.email} has no password hash")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User has no password hash"
+            )
+        
+        # Verify password using direct bcrypt (bypass passlib issues)
+        import bcrypt
+        try:
+            # Ensure both are bytes
+            password_bytes = request.password.encode('utf-8')
+            hash_bytes = hashed_pwd.encode('utf-8') if isinstance(hashed_pwd, str) else hashed_pwd
+            
+            password_valid = bcrypt.checkpw(password_bytes, hash_bytes)
+        except Exception as e:
+            # If bcrypt fails, try verify_password as fallback
+            logger.debug(f"Bcrypt check failed, trying passlib: {e}")
+            password_valid = verify_password(request.password, hashed_pwd)
+        
+        if not password_valid:
+            logger.warning(f"Login attempt with incorrect password for: {request.email}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password"
+            )
+        
+        if not user.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is disabled"
+            )
+        
+        # Create token
+        token_data = {
+            "sub": user["email"],
             "role": user["role"],
-            "district_code": user.get("district_code"),
-            "permissions": ROLE_PERMISSIONS.get(UserRole(user["role"]), {})
+            "user_id": user["id"],
+            "full_name": user["full_name"],
+            "district_code": user.get("district_code")
         }
-    }
+        access_token = create_access_token(token_data)
+        
+        logger.info(f"Successful login for user: {user['email']} (role: {user['role']})")
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "full_name": user["full_name"],
+                "role": user["role"],
+                "district_code": user.get("district_code"),
+                "permissions": ROLE_PERMISSIONS.get(UserRole(user["role"]), {})
+            }
+        }
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        logger.error(f"Login error for {request.email}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during login. Please try again."
+        )
 
 @router.post("/google-login", response_model=Token)
 async def google_login(google_token: dict):
