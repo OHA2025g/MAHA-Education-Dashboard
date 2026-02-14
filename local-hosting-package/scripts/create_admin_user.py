@@ -49,28 +49,59 @@ async def create_admin_user():
     
     db = client[DB_NAME]
     
-    # Check if admin user exists
+    # Check if admin user exists (case-insensitive)
     print(f"\nChecking for existing admin user...")
-    existing_admin = await db.users.find_one({"email": ADMIN_EMAIL})
+    admin_email_lower = ADMIN_EMAIL.lower()
+    
+    # Try exact match first
+    existing_admin = await db.users.find_one({"email": admin_email_lower})
+    if not existing_admin:
+        # Try case-insensitive search
+        existing_admin = await db.users.find_one({"email": {"$regex": f"^{ADMIN_EMAIL}$", "$options": "i"}})
     
     if existing_admin:
-        print(f"✓ Admin user already exists: {ADMIN_EMAIL}")
+        print(f"✓ Admin user already exists: {existing_admin.get('email')}")
         print(f"  User ID: {existing_admin.get('id')}")
         print(f"  Full Name: {existing_admin.get('full_name')}")
         print(f"  Role: {existing_admin.get('role')}")
         print(f"  Is Active: {existing_admin.get('is_active')}")
         
-        # Check if password hash exists
-        if existing_admin.get("hashed_password"):
-            print(f"  Password: Hashed (exists)")
-        else:
-            print(f"  Password: Missing - will update")
+        # Normalize email to lowercase if needed
+        if existing_admin.get('email') != admin_email_lower:
+            print(f"  Normalizing email to lowercase...")
+            await db.users.update_one(
+                {"id": existing_admin.get('id')},
+                {"$set": {"email": admin_email_lower, "updated_at": datetime.now(timezone.utc)}}
+            )
+            print(f"  ✓ Email normalized to lowercase")
+        
+        # Check if password hash exists and is valid
+        hashed_pwd = existing_admin.get("hashed_password")
+        if not hashed_pwd:
+            print(f"  Password: Missing - will create")
             hashed_password = get_password_hash(ADMIN_PASSWORD)
             await db.users.update_one(
-                {"email": ADMIN_EMAIL},
-                {"$set": {"hashed_password": hashed_password, "updated_at": datetime.now(timezone.utc)}}
+                {"id": existing_admin.get('id')},
+                {"$set": {
+                    "hashed_password": hashed_password,
+                    "updated_at": datetime.now(timezone.utc),
+                    "is_active": True
+                }}
             )
-            print(f"  ✓ Password hash updated")
+            print(f"  ✓ Password hash created")
+        else:
+            # Test password hash
+            from utils.auth import verify_password
+            if verify_password(ADMIN_PASSWORD, hashed_pwd):
+                print(f"  Password: Valid hash exists")
+            else:
+                print(f"  Password: Invalid hash - will update")
+                hashed_password = get_password_hash(ADMIN_PASSWORD)
+                await db.users.update_one(
+                    {"id": existing_admin.get('id')},
+                    {"$set": {"hashed_password": hashed_password, "updated_at": datetime.now(timezone.utc)}}
+                )
+                print(f"  ✓ Password hash updated")
         
         client.close()
         return 0
@@ -79,7 +110,7 @@ async def create_admin_user():
     print(f"\nCreating admin user...")
     admin_user = {
         "id": str(uuid.uuid4()),
-        "email": ADMIN_EMAIL,
+        "email": admin_email_lower,
         "full_name": "System Administrator",
         "role": "admin",
         "is_active": True,

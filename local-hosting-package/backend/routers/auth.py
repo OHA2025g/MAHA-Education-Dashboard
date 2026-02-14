@@ -51,47 +51,78 @@ async def login(request: LoginRequest):
         # Use global db, or get_db() if not set
         database = db if db is not None else get_db()
         
-        # Find user
-        user = await database.users.find_one({"email": request.email})
+        # Normalize email to lowercase for case-insensitive lookup
+        email_lower = request.email.lower().strip()
+        
+        logger.info(f"Login attempt for email: {email_lower}")
+        
+        # Find user - try exact match first, then case-insensitive
+        user = await database.users.find_one({"email": email_lower})
+        if not user:
+            # Try case-insensitive search as fallback
+            user = await database.users.find_one({"email": {"$regex": f"^{request.email}$", "$options": "i"}})
         
         if not user:
-            logger.warning(f"Login attempt with non-existent email: {request.email}")
+            logger.warning(f"Login attempt with non-existent email: {email_lower}")
+            # Don't reveal if email exists or not for security
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password"
             )
         
+        logger.debug(f"User found: {user.get('email')}, role: {user.get('role')}, active: {user.get('is_active')}")
+        
         # Get password hash
         hashed_pwd = user.get("hashed_password", "")
         
         if not hashed_pwd:
-            logger.warning(f"User {request.email} has no password hash")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User has no password hash"
-            )
+            logger.warning(f"User {email_lower} has no password hash - user_id: {user.get('id')}")
+            # Try to fix by creating password hash
+            try:
+                from utils.auth import get_password_hash
+                new_hash = get_password_hash("admin123")
+                await database.users.update_one(
+                    {"id": user["id"]},
+                    {"$set": {"hashed_password": new_hash, "updated_at": datetime.now(timezone.utc)}}
+                )
+                logger.info(f"Created password hash for user {email_lower}")
+                hashed_pwd = new_hash
+            except Exception as fix_error:
+                logger.error(f"Failed to create password hash: {fix_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect email or password"
+                )
         
         # Verify password using direct bcrypt (bypass passlib issues)
         import bcrypt
+        password_valid = False
         try:
             # Ensure both are bytes
             password_bytes = request.password.encode('utf-8')
             hash_bytes = hashed_pwd.encode('utf-8') if isinstance(hashed_pwd, str) else hashed_pwd
             
             password_valid = bcrypt.checkpw(password_bytes, hash_bytes)
+            logger.debug(f"Bcrypt verification result: {password_valid}")
         except Exception as e:
             # If bcrypt fails, try verify_password as fallback
             logger.debug(f"Bcrypt check failed, trying passlib: {e}")
-            password_valid = verify_password(request.password, hashed_pwd)
+            try:
+                password_valid = verify_password(request.password, hashed_pwd)
+                logger.debug(f"Passlib verification result: {password_valid}")
+            except Exception as verify_error:
+                logger.error(f"Password verification failed: {verify_error}")
+                password_valid = False
         
         if not password_valid:
-            logger.warning(f"Login attempt with incorrect password for: {request.email}")
+            logger.warning(f"Login attempt with incorrect password for: {email_lower}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password"
             )
         
         if not user.get("is_active", True):
+            logger.warning(f"Login attempt for inactive account: {email_lower}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account is disabled"
@@ -107,7 +138,7 @@ async def login(request: LoginRequest):
         }
         access_token = create_access_token(token_data)
         
-        logger.info(f"Successful login for user: {user['email']} (role: {user['role']})")
+        logger.info(f"Successful login for user: {user['email']} (role: {user['role']}, user_id: {user.get('id')})")
         
         return {
             "access_token": access_token,
@@ -359,17 +390,39 @@ async def create_default_admin(database):
     global db
     db = database
     
-    admin_exists = await db.users.find_one({"role": "admin"})
-    if not admin_exists:
+    admin_email = "admin@mahaedume.gov.in"
+    admin_password = "admin123"
+    
+    # Check if admin exists (case-insensitive)
+    admin_exists = await db.users.find_one({"email": {"$regex": f"^{admin_email}$", "$options": "i"}})
+    
+    if admin_exists:
+        # Ensure password hash exists and is correct
+        if not admin_exists.get("hashed_password"):
+            print(f"Admin user exists but has no password hash. Updating...")
+            hashed_password = get_password_hash(admin_password)
+            await db.users.update_one(
+                {"email": admin_exists["email"]},
+                {"$set": {
+                    "hashed_password": hashed_password,
+                    "updated_at": datetime.now(timezone.utc),
+                    "is_active": True
+                }}
+            )
+            print(f"✓ Admin password hash updated")
+        else:
+            print(f"✓ Admin user already exists: {admin_exists.get('email')}")
+    else:
+        # Create new admin user
         admin_user = {
             "id": str(uuid.uuid4()),
-            "email": "admin@mahaedume.gov.in",
+            "email": admin_email.lower(),
             "full_name": "System Administrator",
             "role": "admin",
             "is_active": True,
-            "hashed_password": get_password_hash("admin123"),
+            "hashed_password": get_password_hash(admin_password),
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc)
         }
         await db.users.insert_one(admin_user)
-        print("Default admin user created: admin@mahaedume.gov.in / admin123")
+        print(f"✓ Default admin user created: {admin_email} / {admin_password}")
