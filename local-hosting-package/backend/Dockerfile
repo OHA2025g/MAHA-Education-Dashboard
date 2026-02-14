@@ -40,6 +40,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Copy scripts directory for admin user creation
+COPY ../scripts/create_admin_user.py ./scripts/
+RUN mkdir -p scripts && chmod +x scripts/create_admin_user.py
+
 # Create necessary directories
 RUN mkdir -p uploads logs data/excel data/mongodb
 
