@@ -25,7 +25,14 @@ echo -e "${YELLOW}[1/3] Creating/Verifying admin user...${NC}"
 # Try Docker first, then direct
 if command -v docker &> /dev/null && docker compose ps backend &> /dev/null 2>&1; then
     echo "Using Docker container..."
-    docker compose exec -T backend python scripts/create_admin_user.py
+    # Copy script into container and run it
+    docker compose exec backend bash -c "
+    cat > /tmp/create_admin_user.py << 'EOFPYTHON'
+$(cat "$SCRIPT_DIR/create_admin_user.py")
+EOFPYTHON
+    python3 /tmp/create_admin_user.py
+    rm /tmp/create_admin_user.py
+    "
 elif [ -f /.dockerenv ]; then
     echo "Running inside container..."
     python3 "$SCRIPT_DIR/create_admin_user.py"
