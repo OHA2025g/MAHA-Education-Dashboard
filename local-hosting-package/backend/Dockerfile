@@ -24,8 +24,7 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libpango1.0-dev \
     libcairo2-dev \
-    libgdk-pixbuf2.0-dev \
-    libffi-dev \
+    libgdk-pixbuf-xlib-2.0-dev \
     shared-mime-info \
     curl \
     wget \

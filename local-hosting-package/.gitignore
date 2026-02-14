@@ -65,3 +65,4 @@ data/excel/*.xls
 tmp/
 temp/
 *.tmp
+.env.prod

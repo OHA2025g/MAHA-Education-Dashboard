@@ -20,7 +20,8 @@ RUN yarn install --frozen-lockfile --network-timeout 100000
 COPY . .
 
 # Build arguments for environment variables
-ARG REACT_APP_BACKEND_URL=https://schooldashboard.demoapi.agrayianailabs.com
+# Default to production URL, can be overridden via docker-compose
+ARG REACT_APP_BACKEND_URL=https://school_dashboard.demo.agrayianailabs.com/api
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
 # Build the application
