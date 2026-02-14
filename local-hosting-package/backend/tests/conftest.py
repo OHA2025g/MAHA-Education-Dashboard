@@ -10,7 +10,8 @@ from typing import AsyncGenerator
 
 # Test database configuration
 TEST_DB_NAME = "test_maharashtra_edu"
-TEST_MONGO_URL = os.environ.get("TEST_MONGO_URL", "mongodb://localhost:27017")
+# Use MONGO_URL from environment if available (for Docker), otherwise default to localhost
+TEST_MONGO_URL = os.environ.get("TEST_MONGO_URL") or os.environ.get("MONGO_URL") or "mongodb://mongodb:27017"
 
 
 # pytest-asyncio will handle event loop creation
@@ -20,7 +21,22 @@ TEST_MONGO_URL = os.environ.get("TEST_MONGO_URL", "mongodb://localhost:27017")
 @pytest_asyncio.fixture(scope="function")
 async def test_db():
     """Create a test database connection"""
-    client = AsyncIOMotorClient(TEST_MONGO_URL)
+    # Get MongoDB URL at runtime, not at import time
+    # In Docker, use the service name 'mongodb', otherwise use localhost
+    mongo_url = os.environ.get("TEST_MONGO_URL") or os.environ.get("MONGO_URL") or "mongodb://mongodb:27017"
+    print(f"DEBUG: Connecting to MongoDB at {mongo_url}")  # Debug output
+    
+    # Create client with server selection timeout
+    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+    
+    # Test connection
+    try:
+        await client.admin.command('ping')
+        print("DEBUG: MongoDB connection successful")
+    except Exception as e:
+        print(f"DEBUG: MongoDB connection failed: {e}")
+        raise
+    
     db = client[TEST_DB_NAME]
     try:
         yield db
@@ -51,7 +67,9 @@ async def test_client(clean_db):
     
     try:
         # Set environment variables for test BEFORE importing server
-        os.environ["MONGO_URL"] = TEST_MONGO_URL
+        # Get MongoDB URL at runtime, not at import time
+        mongo_url = os.environ.get("TEST_MONGO_URL") or os.environ.get("MONGO_URL") or "mongodb://mongodb:27017"
+        os.environ["MONGO_URL"] = mongo_url
         os.environ["DB_NAME"] = TEST_DB_NAME
         
         # Import and create app with test database
