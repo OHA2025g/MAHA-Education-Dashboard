@@ -17,7 +17,7 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-to-a-strong-secret-key}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://school_dashboard.demo.agrayianailabs.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://schooldashboard.demo.agrayianailabs.com}
       CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-true}
     volumes:
       - ./backend/uploads:/app/uploads
@@ -51,7 +51,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-https://school_dashboard.demo.agrayianailabs.com/api}
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-https://schooldashboard.demo.agrayianailabs.com/api}
     container_name: pune-dashboard-frontend-prod
     restart: always
     ports:

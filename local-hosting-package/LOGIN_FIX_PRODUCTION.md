@@ -64,7 +64,7 @@ python3 scripts/create_admin_user.py
 
 ### Step 4: Test Login
 ```bash
-curl -X POST https://school_dashboard.demo.agrayianailabs.com/api/auth/login \
+curl -X POST https://schooldashboard.demo.agrayianailabs.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "admin@mahaedume.gov.in", "password": "admin123"}'
 ```

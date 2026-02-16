@@ -364,7 +364,7 @@ async def test_security_cors():
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(f"{BASE_URL}/api/health", 
-                                       headers={"Origin": "https://school_dashboard.demo.agrayianailabs.com"})
+                                       headers={"Origin": "https://schooldashboard.demo.agrayianailabs.com"})
             duration = time.time() - start
             
             headers = dict(response.headers)

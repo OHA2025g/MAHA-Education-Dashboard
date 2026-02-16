@@ -2,7 +2,7 @@
 
 ## Production Environment
 
-- **Frontend URL:** https://school_dashboard.demo.agrayianailabs.com/
+- **Frontend URL:** https://schooldashboard.demo.agrayianailabs.com/
 - **Backend API:** Should be accessible at the same domain (via reverse proxy) or separate subdomain
 - **MongoDB:** Remote MongoDB at `mongodb://mongo:b5a7adcac8107c867aa1@31.97.207.166:27017/?tls=false`
 
@@ -48,12 +48,12 @@ DB_NAME=maharashtra_edu
 MONGO_URL=mongodb://mongo:b5a7adcac8107c867aa1@31.97.207.166:27017/?tls=false
 
 # Backend API URL (for frontend)
-# If backend is at same domain: https://school_dashboard.demo.agrayianailabs.com/api
-# If backend is at separate subdomain: https://api.school_dashboard.demo.agrayianailabs.com
-REACT_APP_BACKEND_URL=https://school_dashboard.demo.agrayianailabs.com/api
+# If backend is at same domain: https://schooldashboard.demo.agrayianailabs.com/api
+# If backend is at separate subdomain: https://api.schooldashboard.demo.agrayianailabs.com
+REACT_APP_BACKEND_URL=https://schooldashboard.demo.agrayianailabs.com/api
 
 # CORS
-CORS_ORIGINS=https://school_dashboard.demo.agrayianailabs.com
+CORS_ORIGINS=https://schooldashboard.demo.agrayianailabs.com
 CORS_ALLOW_CREDENTIALS=true
 
 # Security
@@ -97,11 +97,11 @@ docker compose -f docker-compose.prod.yml logs -f
 If using Nginx as reverse proxy, configure it to route requests:
 
 ```nginx
-# /etc/nginx/sites-available/school_dashboard.demo.agrayianailabs.com
+# /etc/nginx/sites-available/schooldashboard.demo.agrayianailabs.com
 
 server {
     listen 80;
-    server_name school_dashboard.demo.agrayianailabs.com;
+    server_name schooldashboard.demo.agrayianailabs.com;
     
     # Redirect HTTP to HTTPS
     return 301 https://$server_name$request_uri;
@@ -109,7 +109,7 @@ server {
 
 server {
     listen 443 ssl http2;
-    server_name school_dashboard.demo.agrayianailabs.com;
+    server_name schooldashboard.demo.agrayianailabs.com;
 
     ssl_certificate /path/to/ssl/cert.pem;
     ssl_certificate_key /path/to/ssl/key.pem;
@@ -140,7 +140,7 @@ server {
         proxy_cache_bypass $http_upgrade;
         
         # CORS headers (if needed)
-        add_header 'Access-Control-Allow-Origin' 'https://school_dashboard.demo.agrayianailabs.com' always;
+        add_header 'Access-Control-Allow-Origin' 'https://schooldashboard.demo.agrayianailabs.com' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
         add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
         
@@ -172,21 +172,21 @@ server {
 
 ### Check Backend Health
 ```bash
-curl https://school_dashboard.demo.agrayianailabs.com/api/health
+curl https://schooldashboard.demo.agrayianailabs.com/api/health
 ```
 
 ### Check Frontend
 ```bash
-curl https://school_dashboard.demo.agrayianailabs.com/health
+curl https://schooldashboard.demo.agrayianailabs.com/health
 ```
 
 ### Test API Endpoints
 ```bash
 # Root endpoint
-curl https://school_dashboard.demo.agrayianailabs.com/api/
+curl https://schooldashboard.demo.agrayianailabs.com/api/
 
 # API documentation
-open https://school_dashboard.demo.agrayianailabs.com/docs
+open https://schooldashboard.demo.agrayianailabs.com/docs
 ```
 
 ## Step 6: Monitoring and Maintenance

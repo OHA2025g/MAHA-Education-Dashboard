@@ -3,7 +3,7 @@
 **Date:** February 14, 2026  
 **Project:** MAHA Education Dashboard for Pune  
 **Test Environment:** Docker Containers (Backend, Frontend, MongoDB)  
-**Production URL:** https://school_dashboard.demo.agrayianailabs.com/
+**Production URL:** https://schooldashboard.demo.agrayianailabs.com/
 
 ---
 
@@ -119,7 +119,7 @@ All comprehensive tests have passed successfully. The system is fully functional
 
 ### Frontend Configuration ✅
 - **Backend URL Resolution:** ✅ Uses environment variables
-- **Production URL:** ✅ Configured for https://school_dashboard.demo.agrayianailabs.com/api
+- **Production URL:** ✅ Configured for https://schooldashboard.demo.agrayianailabs.com/api
 - **Fallback Logic:** ✅ Handles localhost correctly
 
 ---
@@ -273,8 +273,8 @@ python3 scripts/migrate_to_production_db.py
 ### Access URLs
 - **Local Frontend:** http://localhost
 - **Local Backend API:** http://localhost:8002
-- **Production Frontend:** https://school_dashboard.demo.agrayianailabs.com/
-- **Production Backend:** https://school_dashboard.demo.agrayianailabs.com/api
+- **Production Frontend:** https://schooldashboard.demo.agrayianailabs.com/
+- **Production Backend:** https://schooldashboard.demo.agrayianailabs.com/api
 - **API Docs:** http://localhost:8002/docs
 
 ---
@@ -290,7 +290,7 @@ The MAHA Education Dashboard has **passed all comprehensive tests** with a **100
 - ✅ **Production Ready:** Configuration validated
 - ✅ **Well Documented:** Complete documentation available
 
-**The system is ready for production deployment at https://school_dashboard.demo.agrayianailabs.com/**
+**The system is ready for production deployment at https://schooldashboard.demo.agrayianailabs.com/**
 
 ---
 

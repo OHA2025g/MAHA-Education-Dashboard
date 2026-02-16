@@ -56,10 +56,10 @@ curl http://localhost/health
 
 ## 📋 Configuration Summary
 
-- **Production URL:** https://school_dashboard.demo.agrayianailabs.com/
-- **Backend API:** https://school_dashboard.demo.agrayianailabs.com/api
+- **Production URL:** https://schooldashboard.demo.agrayianailabs.com/
+- **Backend API:** https://schooldashboard.demo.agrayianailabs.com/api
 - **MongoDB:** mongodb://mongo:***@31.97.207.166:27017/?tls=false
-- **CORS Origins:** https://school_dashboard.demo.agrayianailabs.com
+- **CORS Origins:** https://schooldashboard.demo.agrayianailabs.com
 
 ## 🔧 Important Notes
 
