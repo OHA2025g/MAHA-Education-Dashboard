@@ -1,0 +1,114 @@
+[
+  {
+    "category": "Smoke",
+    "test_name": "Backend Health",
+    "passed": true,
+    "message": "Response: healthy",
+    "duration": 0.11367225646972656,
+    "timestamp": "2026-02-15T23:12:45.728162"
+  },
+  {
+    "category": "Smoke",
+    "test_name": "Frontend Health",
+    "passed": true,
+    "message": "",
+    "duration": 0.023001670837402344,
+    "timestamp": "2026-02-15T23:12:45.751331"
+  },
+  {
+    "category": "Smoke",
+    "test_name": "Backend Root",
+    "passed": true,
+    "message": "",
+    "duration": 0.009817838668823242,
+    "timestamp": "2026-02-15T23:12:45.761254"
+  },
+  {
+    "category": "Functional",
+    "test_name": "API Endpoints Structure",
+    "passed": true,
+    "message": "Passed: 2, Failed: 0",
+    "duration": 0.01870417594909668,
+    "timestamp": "2026-02-15T23:12:45.780031"
+  },
+  {
+    "category": "Functional",
+    "test_name": "API Documentation",
+    "passed": true,
+    "message": "Passed: 3, Failed: 0",
+    "duration": 0.11064720153808594,
+    "timestamp": "2026-02-15T23:12:45.890705"
+  },
+  {
+    "category": "Integration",
+    "test_name": "Backend-Frontend Connectivity",
+    "passed": true,
+    "message": "",
+    "duration": 0.010159015655517578,
+    "timestamp": "2026-02-15T23:12:45.900886"
+  },
+  {
+    "category": "Integration",
+    "test_name": "API Response Format",
+    "passed": true,
+    "message": "",
+    "duration": 0.00842905044555664,
+    "timestamp": "2026-02-15T23:12:45.909429"
+  },
+  {
+    "category": "System",
+    "test_name": "End-to-End Functionality",
+    "passed": true,
+    "message": "Steps passed: 3/3",
+    "duration": 0.014637947082519531,
+    "timestamp": "2026-02-15T23:12:45.924138"
+  },
+  {
+    "category": "Performance",
+    "test_name": "Response Time",
+    "passed": true,
+    "message": "Response time: 2.70ms",
+    "duration": 0.0073490142822265625,
+    "timestamp": "2026-02-15T23:12:45.931510"
+  },
+  {
+    "category": "Performance",
+    "test_name": "Load Test (10 requests)",
+    "passed": true,
+    "message": "All 10 requests successful in 35.27ms",
+    "duration": 0.035272836685180664,
+    "timestamp": "2026-02-15T23:12:45.966804"
+  },
+  {
+    "category": "Security",
+    "test_name": "Injection Protection",
+    "passed": true,
+    "message": "",
+    "duration": 0.010283708572387695,
+    "timestamp": "2026-02-15T23:12:45.977108"
+  },
+  {
+    "category": "Security",
+    "test_name": "XSS Protection",
+    "passed": true,
+    "message": "",
+    "duration": 0.00728607177734375,
+    "timestamp": "2026-02-15T23:12:45.984504"
+  },
+  {
+    "category": "Security",
+    "test_name": "CORS Headers",
+    "passed": true,
+    "message": "",
+    "duration": 0.02180004119873047,
+    "timestamp": "2026-02-15T23:12:46.006390"
+  },
+  {
+    "category": "Regression",
+    "test_name": "Existing Endpoints",
+    "passed": true,
+    "message": "Passed: 4, Failed: 0",
+    "duration": 0.01044917106628418,
+    "timestamp": "2026-02-15T23:12:46.016924"
+  }
+]

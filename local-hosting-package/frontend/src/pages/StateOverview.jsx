@@ -37,6 +37,7 @@ import {
 } from "recharts";
 
 import { getBackendUrl } from "@/lib/backend";
+import DataLoadError from "@/components/DataLoadError";
 
 const BACKEND_URL = getBackendUrl();
 const API = `${BACKEND_URL}/api`;
@@ -44,6 +45,7 @@ const API = `${BACKEND_URL}/api`;
 const StateOverview = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState(null);
   const [kpiData, setKpiData] = useState(null);
   const [districts, setDistricts] = useState([]);
   const [view, setView] = useState("grid");
@@ -52,6 +54,7 @@ const StateOverview = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    setApiError(null);
     try {
       const [kpiRes, districtsRes] = await Promise.all([
         axios.get(`${API}/state/overview`),
@@ -61,6 +64,7 @@ const StateOverview = () => {
       setDistricts(districtsRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
+      setApiError(error);
     } finally {
       setLoading(false);
     }
@@ -114,6 +118,14 @@ const StateOverview = () => {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="loading-spinner" />
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] p-6">
+        <DataLoadError onRetry={fetchData} title="State overview could not be loaded" />
       </div>
     );
   }

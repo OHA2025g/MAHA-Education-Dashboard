@@ -534,7 +534,7 @@ async def create_default_admin(database):
                 pass
         
         # Method 3: Iterate through users
-    if not admin_exists:
+        if not admin_exists:
             try:
                 all_users = await db.users.find({}).to_list(length=100)
                 for u in all_users:
@@ -609,17 +609,17 @@ async def create_default_admin(database):
                     logger.info(f"✓ Admin password hash recreated")
         else:
             # Create new admin user
-        admin_user = {
-            "id": str(uuid.uuid4()),
+            admin_user = {
+                "id": str(uuid.uuid4()),
                 "email": admin_email_lower,
-            "full_name": "System Administrator",
-            "role": "admin",
-            "is_active": True,
+                "full_name": "System Administrator",
+                "role": "admin",
+                "is_active": True,
                 "hashed_password": get_password_hash(admin_password),
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc)
-        }
-        await db.users.insert_one(admin_user)
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }
+            await db.users.insert_one(admin_user)
             logger.info(f"✓ Default admin user created: {admin_email} / {admin_password}")
     except Exception as e:
         logger.error(f"Failed to create/verify admin user: {e}", exc_info=True)

@@ -95,11 +95,11 @@ cp .env.template .env
 #   OPENAI_MODEL=gpt-4o-mini
 # See: backend/env.local.template
 
-# Start the backend server
-uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+# Start the backend server (port 8002 matches frontend default)
+uvicorn server:app --host 0.0.0.0 --port 8002 --reload
 ```
 
-The backend will be available at: http://localhost:8001
+The backend will be available at: http://localhost:8002
 
 ### Step 5: Setup Frontend (in a new terminal)
 
@@ -195,17 +195,39 @@ To add data for other Maharashtra districts:
 
 ## 🛠️ Troubleshooting
 
+### Data not loading in dashboards
+Dashboards fetch data from the **backend API**. If you see empty charts or "Data could not be loaded":
+
+1. **Start the backend** (and MongoDB):
+   - **Docker:** From this folder run `docker compose up -d`. Backend will be at **http://localhost:8002**.
+   - **Manual:** Start MongoDB, then from `backend/` run `uvicorn server:app --host 0.0.0.0 --port 8002 --reload` (use port 8002 so it matches the frontend default).
+
+2. **Point the frontend to the backend:** In `frontend/.env.local` (or `.env`) set:
+   ```env
+   REACT_APP_BACKEND_URL=http://localhost:8002
+   ```
+   If you run the backend on a different port (e.g. 8001), use that URL instead.
+
+3. Restart the frontend (`yarn start`) after changing env, then **Retry** on the error message or refresh the page.
+
 ### MongoDB Connection Error
 - Ensure MongoDB is running: `sudo systemctl status mongod`
 - Check the MONGO_URL in backend/.env
 
 ### Port Already in Use
-- Backend: Change port in uvicorn command
-- Frontend: Use `PORT=3001 yarn start`
+- Backend: Change port in uvicorn command and set `REACT_APP_BACKEND_URL` in frontend to the same URL
+- Frontend: Use `PORT=3001 yarn start` or set `PORT=8000` in `frontend/.env.local`
 
 ### Module Not Found
 - Backend: Ensure virtual environment is activated
 - Frontend: Run `yarn install` again
+
+## 📚 Documentation
+
+- **[Documentation index](docs/README.md)** — deployment, testing, guides, API
+- **[Project structure](PROJECT_STRUCTURE.md)** — folder layout and key files
+- **Config templates:** `config/` (see `config/README.md`)
+- **Scripts:** `scripts/` (see `scripts/README.md`)
 
 ## 📧 Support
 

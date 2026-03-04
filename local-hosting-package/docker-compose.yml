@@ -1,5 +1,4 @@
 services:
-  # MongoDB Database
   mongodb:
     image: mongo:7.0
     container_name: pune-dashboard-mongodb
@@ -9,23 +8,22 @@ services:
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
-      - ./data/mongodb:/data/backup
     environment:
       MONGO_INITDB_DATABASE: ${DB_NAME:-maharashtra_edu}
     networks:
       - dashboard-network
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  # Backend API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: pune-dashboard-backend:latest
     container_name: pune-dashboard-backend
     restart: unless-stopped
     ports:
@@ -54,23 +52,24 @@ services:
       retries: 3
       start_period: 40s
 
-  # Frontend
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
         REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8002}
+    image: pune-dashboard-frontend:latest
     container_name: pune-dashboard-frontend
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - dashboard-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -78,9 +77,7 @@ services:
 
 volumes:
   mongodb_data:
-    driver: local
   mongodb_config:
-    driver: local
 
 networks:
   dashboard-network:

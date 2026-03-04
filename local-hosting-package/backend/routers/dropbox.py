@@ -239,6 +239,89 @@ async def get_dropbox_block_wise(
     return block_data
 
 
+# Normalize management label to one of: Government, Private Aided, Private Unaided
+def _normalize_management(raw: str) -> str:
+    if not raw:
+        return "Other"
+    s = str(raw).strip().lower()
+    if s in ("government", "govt", "govt.", "gov", "government."):
+        return "Government"
+    if s in ("private aided", "private aided.", "pvt aided", "pvt. aided", "aided"):
+        return "Private Aided"
+    if s in ("private unaided", "private unaided.", "pvt unaided", "pvt. unaided", "unaided"):
+        return "Private Unaided"
+    if "government" in s or "govt" in s:
+        return "Government"
+    if "aided" in s and "unaided" not in s:
+        return "Private Aided"
+    if "unaided" in s:
+        return "Private Unaided"
+    return "Other"
+
+
+@router.get("/management-wise")
+async def get_dropbox_management_wise(
+    district_code: Optional[str] = Query(None),
+    block_code: Optional[str] = Query(None),
+    udise_code: Optional[str] = Query(None),
+):
+    """Get dropbox analytics grouped by school management: Government, Private Aided, Private Unaided"""
+    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code)
+    pipeline = prepend_match([
+        {
+            "$group": {
+                "_id": "$management",
+                "school_count": {"$sum": 1},
+                "total_remarks": {"$sum": "$total_remarks"},
+                "dropout": {"$sum": "$dropout"},
+                "wrong_entry": {"$sum": "$wrong_entry"},
+                "active_import": {"$sum": "$active_import"},
+                "class12_passed": {"$sum": "$class12_passed"},
+                "migrated_domestic": {"$sum": "$migrated_domestic"},
+                "migrated_country": {"$sum": "$migrated_country"},
+                "iti_polytechnic": {"$sum": "$iti_polytechnic"},
+            }
+        }
+    ], scope_match)
+
+    cursor = db.dropbox_analytics.aggregate(pipeline)
+    rows = await cursor.to_list(length=50)
+
+    # Merge by normalized management (Government, Private Aided, Private Unaided, Other)
+    buckets = {
+        "Government": {"school_count": 0, "total_remarks": 0, "dropout": 0, "wrong_entry": 0, "active_import": 0, "class12_passed": 0, "migrated_domestic": 0, "migrated_country": 0, "iti_polytechnic": 0},
+        "Private Aided": {"school_count": 0, "total_remarks": 0, "dropout": 0, "wrong_entry": 0, "active_import": 0, "class12_passed": 0, "migrated_domestic": 0, "migrated_country": 0, "iti_polytechnic": 0},
+        "Private Unaided": {"school_count": 0, "total_remarks": 0, "dropout": 0, "wrong_entry": 0, "active_import": 0, "class12_passed": 0, "migrated_domestic": 0, "migrated_country": 0, "iti_polytechnic": 0},
+        "Other": {"school_count": 0, "total_remarks": 0, "dropout": 0, "wrong_entry": 0, "active_import": 0, "class12_passed": 0, "migrated_domestic": 0, "migrated_country": 0, "iti_polytechnic": 0},
+    }
+    for r in rows:
+        label = _normalize_management(r.get("_id") or "")
+        if label not in buckets:
+            buckets[label] = {"school_count": 0, "total_remarks": 0, "dropout": 0, "wrong_entry": 0, "active_import": 0, "class12_passed": 0, "migrated_domestic": 0, "migrated_country": 0, "iti_polytechnic": 0}
+        for k in buckets[label]:
+            buckets[label][k] += r.get(k, 0) or 0
+
+    # Response: always return the three main categories (and Other if present)
+    result = []
+    for label in ("Government", "Private Aided", "Private Unaided", "Other"):
+        b = buckets.get(label, {})
+        total_remarks = b.get("total_remarks", 0) or 1
+        result.append({
+            "management": label,
+            "school_count": b.get("school_count", 0),
+            "total_remarks": b.get("total_remarks", 0),
+            "dropout": b.get("dropout", 0),
+            "dropout_pct": round((b.get("dropout", 0) / total_remarks) * 100, 1) if total_remarks > 0 else 0,
+            "wrong_entry": b.get("wrong_entry", 0),
+            "active_import": b.get("active_import", 0),
+            "class12_passed": b.get("class12_passed", 0),
+            "avg_remarks_per_school": round(b.get("total_remarks", 0) / max(b.get("school_count", 1), 1), 1),
+        })
+    # Drop "Other" if zero schools
+    result = [r for r in result if r["management"] != "Other" or r["school_count"] > 0]
+    return result
+
+
 @router.get("/top-schools")
 async def get_dropbox_top_schools(
     order: str = Query("desc", description="desc for highest, asc for lowest"),

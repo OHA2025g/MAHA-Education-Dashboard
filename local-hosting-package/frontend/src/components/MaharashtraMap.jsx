@@ -146,13 +146,13 @@ const MaharashtraMap = ({ data, onDistrictClick }) => {
         <div className="flex gap-4 mt-2">
           <Badge variant="outline" className="text-xs">
             <School className="w-3 h-3 mr-1" />
-            {data.summary?.districts_with_data || 0} / {data.summary?.total_districts || 36} Districts with Data
+            {data?.summary?.districts_with_data ?? 0} / {data?.summary?.total_districts ?? 36} Districts with Data
           </Badge>
           <Badge variant="secondary" className="text-xs">
             Avg {metricLabels[selectedMetric]}: {
-              selectedMetric === 'shi' ? data.summary?.avg_shi :
-              selectedMetric === 'aadhaar_coverage' ? data.summary?.avg_aadhaar :
-              selectedMetric === 'apaar_coverage' ? data.summary?.avg_apaar : 'N/A'
+              selectedMetric === 'shi' ? (data?.summary?.avg_shi ?? 'N/A') :
+              selectedMetric === 'aadhaar_coverage' ? (data?.summary?.avg_aadhaar ?? 'N/A') :
+              selectedMetric === 'apaar_coverage' ? (data?.summary?.avg_apaar ?? 'N/A') : 'N/A'
             }%
           </Badge>
         </div>

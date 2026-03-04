@@ -1118,6 +1118,7 @@ from routers.ctteacher import router as ctteacher_router, init_db as init_ctteac
 from routers.classrooms_toilets import router as classrooms_toilets_router, init_db as init_classrooms_toilets_db
 from routers.executive import router as executive_router, init_db as init_executive_db
 from routers.scope import router as scope_router, init_db as init_scope_db
+from routers.sqaaf import router as sqaaf_router, init_db as init_sqaaf_db
 
 # Initialize all routers with database
 init_auth_db(db)
@@ -1141,6 +1142,7 @@ init_ctteacher_db(db, UPLOADS_DIR)
 init_classrooms_toilets_db(db, UPLOADS_DIR)
 init_executive_db(db)
 init_scope_db(db)
+init_sqaaf_db(db, UPLOADS_DIR)
 
 # Register all routers with /api prefix
 app.include_router(auth_router, prefix="/api")
@@ -1158,6 +1160,7 @@ app.include_router(ctteacher_router, prefix="/api")
 app.include_router(classrooms_toilets_router, prefix="/api")
 app.include_router(executive_router, prefix="/api")
 app.include_router(scope_router, prefix="/api")
+app.include_router(sqaaf_router, prefix="/api")
 
 # CORS middleware
 def _as_bool(v: str) -> bool:

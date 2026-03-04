@@ -20,8 +20,11 @@ import CTTeacherDashboard from "./pages/CTTeacherDashboard";
 import APAARDashboard from "./pages/APAARDashboard";
 import ClassroomsToiletsDashboard from "./pages/ClassroomsToiletsDashboard";
 import ExecutiveDashboard from "./pages/ExecutiveDashboard";
+import SqafDashboard from "./pages/SqafDashboard";
+import StandaloneSqafLayout from "./components/StandaloneSqafLayout";
 import AnalyticsDashboard from "./pages/AnalyticsDashboard";
 import LoginPage from "./pages/LoginPage";
+import LandingPage from "./pages/LandingPage";
 import UserManagement from "./pages/UserManagement";
 import { Toaster } from "@/components/ui/sonner";
 import { getBackendUrl } from "@/lib/backend";
@@ -165,16 +168,26 @@ function App() {
       {IS_GITHUB_PAGES ? (
         <HashRouter>
           <Routes>
-            {/* Public route */}
+            {/* Public routes */}
             <Route path="/login" element={
               user ? <Navigate to="/executive-dashboard" replace /> : <LoginPage onLogin={handleLogin} />
             } />
-            
-            {/* Protected routes */}
-            <Route path="/" element={
+            {/* Independent SQAAF Dashboard – linked from Landing Page "SQAF Dashboard"; not part of MH Education Dashboard 2025-26 */}
+            <Route path="/sqaaf" element={
               <ProtectedRoute user={user}>
-                <DashboardLayout user={user} onLogout={handleLogout} />
+                <StandaloneSqafLayout user={user} onLogout={handleLogout} />
               </ProtectedRoute>
+            }>
+              <Route index element={<SqafDashboard />} />
+            </Route>
+            <Route path="/" element={
+              user ? (
+                <ProtectedRoute user={user}>
+                  <DashboardLayout user={user} onLogout={handleLogout} />
+                </ProtectedRoute>
+              ) : (
+                <LandingPage onLogin={handleLogin} />
+              )
             }>
               <Route index element={<StateOverview />} />
               <Route path="health-index" element={<SchoolHealthIndex />} />
@@ -205,23 +218,33 @@ function App() {
               <Route path="school/:udiseCode" element={<SchoolDetail />} />
             </Route>
             
-            {/* Catch all - redirect to login or dashboard */}
-            <Route path="*" element={<Navigate to={user ? "/executive-dashboard" : "/login"} replace />} />
+            {/* Catch all - redirect to landing or dashboard */}
+            <Route path="*" element={<Navigate to={user ? "/executive-dashboard" : "/"} replace />} />
           </Routes>
         </HashRouter>
       ) : (
         <BrowserRouter basename={ROUTER_BASENAME}>
           <Routes>
-            {/* Public route */}
+            {/* Public routes */}
             <Route path="/login" element={
               user ? <Navigate to="/executive-dashboard" replace /> : <LoginPage onLogin={handleLogin} />
             } />
-            
-            {/* Protected routes */}
-            <Route path="/" element={
+            {/* Independent SQAAF Dashboard – linked from Landing Page "SQAF Dashboard"; not part of MH Education Dashboard 2025-26 */}
+            <Route path="/sqaaf" element={
               <ProtectedRoute user={user}>
-                <DashboardLayout user={user} onLogout={handleLogout} />
+                <StandaloneSqafLayout user={user} onLogout={handleLogout} />
               </ProtectedRoute>
+            }>
+              <Route index element={<SqafDashboard />} />
+            </Route>
+            <Route path="/" element={
+              user ? (
+                <ProtectedRoute user={user}>
+                  <DashboardLayout user={user} onLogout={handleLogout} />
+                </ProtectedRoute>
+              ) : (
+                <LandingPage onLogin={handleLogin} />
+              )
             }>
               <Route index element={<StateOverview />} />
               <Route path="health-index" element={<SchoolHealthIndex />} />
@@ -252,8 +275,8 @@ function App() {
               <Route path="school/:udiseCode" element={<SchoolDetail />} />
             </Route>
             
-            {/* Catch all - redirect to login or dashboard */}
-            <Route path="*" element={<Navigate to={user ? "/executive-dashboard" : "/login"} replace />} />
+            {/* Catch all - redirect to landing or dashboard */}
+            <Route path="*" element={<Navigate to={user ? "/executive-dashboard" : "/"} replace />} />
           </Routes>
         </BrowserRouter>
       )}

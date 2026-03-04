@@ -1,15 +1,18 @@
-## Data folder
+# Data
 
-This repository intentionally does **not** commit raw data dumps (MongoDB `.bson` files) or Excel source files (`.xlsx`) to GitHub.
+This folder holds data-related assets. The repo may **not** commit large raw dumps (MongoDB `.bson`) or Excel (`.xlsx`) to Git.
 
-### What you should do locally
+### Structure
 
-- **MongoDB**: restore your local dump into your local Mongo instance (recommended), then start the backend.
-- **Excel**: keep source Excel files locally if you need to re-run ETL/import jobs.
+| Path | Purpose |
+|------|---------|
+| `excel/` | Source Excel files for ETL/import (e.g. CT Teacher, Aadhaar). Add locally as needed. |
+| `mongodb/` | MongoDB dumps (e.g. `maharashtra_edu/` with `.bson` and `.metadata.json`). Use `mongorestore --db maharashtra_edu data/mongodb/maharashtra_edu/` to restore. |
 
-### Why this is excluded from GitHub
+### Notes
 
-- Raw dumps can contain **sensitive data**.
-- Large binary files make the repo heavy and are harder to review in PRs.
+- **MongoDB**: Restore a dump into your local Mongo, then start the backend.
+- **Excel**: Keep source files here or in `backend/uploads/` if you run ETL/Data Import.
+- Duplicate filenames (e.g. `*.metadata 2.json`) in dumps are safe to remove; keep the main `.metadata.json` and `.bson` per collection.
 
 

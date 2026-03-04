@@ -156,6 +156,13 @@ class ETLPipeline:
         print()
         print(f"Completed at: {datetime.now()}")
         print("=" * 60)
+
+    async def run_ctteacher_only(self, excel_path: str = None):
+        """Run only CT Teacher ETL (clear ctteacher_analytics and load from Excel). Use for real data from Excel."""
+        print("CT Teacher ETL only (real data)")
+        await self.db.ctteacher_analytics.delete_many({})
+        await self.etl_ctteacher(excel_path=excel_path)
+        print(f"  → ctteacher_analytics count: {self.stats.get('ctteacher', 0)}")
     
     async def clear_collections(self):
         """Clear all data collections"""
@@ -566,51 +573,100 @@ class ETLPipeline:
         self.stats["age_wise"] = len(records)
         print(f"  ✓ Loaded {len(records)} records")
     
-    async def etl_ctteacher(self):
-        """ETL for CT Teacher Data"""
+    async def etl_ctteacher(self, excel_path: str = None):
+        """ETL for CT Teacher Data. Schema aligned with process_ctteacher_file for Retirement Risk (age, doj_service, service_years).
+        If excel_path is provided, read from that file; otherwise use EXCEL_FILES['ctteacher']."""
         print("\n[9/10] Processing CT Teacher Data...")
-        df = read_excel_skip_placeholders(EXCEL_FILES["ctteacher"])
-        
+        path = excel_path or EXCEL_FILES["ctteacher"]
+        if not os.path.exists(path):
+            print(f"  ✗ File not found: {path}")
+            return
+        df = read_excel_skip_placeholders(path)
+        current_year = datetime.now().year
+
         records = []
         for _, row in df.iterrows():
+            udise = safe_str(row.get("Udise Code"))
+            if not udise:
+                continue
+
+            # Parse DOB for age (required for Retirement Risk)
+            age = 0
+            dob_val = row.get("DOB")
+            if pd.notna(dob_val):
+                try:
+                    if isinstance(dob_val, str):
+                        dob_date = pd.to_datetime(dob_val)
+                    else:
+                        dob_date = dob_val
+                    age = current_year - dob_date.year
+                except Exception:
+                    pass
+
+            # Parse DoJ for service years
+            service_years = 0
+            doj_val = row.get("Doj Service")
+            if pd.notna(doj_val):
+                try:
+                    if isinstance(doj_val, str):
+                        doj_date = pd.to_datetime(doj_val)
+                    else:
+                        doj_date = doj_val
+                    service_years = current_year - doj_date.year
+                except Exception:
+                    pass
+
+            block_raw = safe_str(row.get("Block Name & Code"))
+            block_name = extract_block_name(block_raw) if block_raw else extract_block_name(row.get("Block Name & Code"))
             gender = safe_str(row.get("Gender"))
             ctet_qualified = safe_int(row.get("Ctet Qualified"))
             aadhaar_verified = safe_str(row.get("AADHAAR Verified"))
-            
+
             records.append({
-                "udise_code": safe_str(row.get("Udise Code")),
+                "udise_code": udise,
                 "school_name": safe_str(row.get("School Name")),
                 "district_name": extract_district_name(row.get("District Name & Code")),
-                "block_name": extract_block_name(row.get("Block Name & Code")),
-                "teacher_name": safe_str(row.get("Teaching Staff Name")),
+                "block_name": block_name,
+                "block_raw": block_raw,
+                "school_management": safe_int(row.get("School Management_Code")),
+                "school_category": safe_int(row.get("School Category_Code")),
+                "teaching_staff_name": safe_str(row.get("Teaching Staff Name")),
                 "teacher_code": safe_str(row.get("Teaching Staff Code")),
                 "gender": gender,
-                "dob": safe_str(row.get("DOB")),
+                "dob": str(dob_val) if pd.notna(dob_val) else "",
+                "age": age,
                 "social_category": safe_str(row.get("Social Category")),
                 "academic_qualification": safe_str(row.get("Academic Qualification")),
                 "professional_qualification": safe_str(row.get("Professional Qualification")),
-                "appointment_type": safe_str(row.get("Nature of Appointment")),
+                "crr_no": safe_str(row.get("CRR No")),
+                "nature_of_appointment": safe_str(row.get("Nature of Appointment")),
                 "staff_type": safe_str(row.get("Staff Type")),
-                "classes_taught": safe_str(row.get("Class Taught")),
-                "main_subject": safe_str(row.get("Sub Taught_1")),
-                "ctet_qualified": ctet_qualified,
+                "doj_service": str(doj_val) if pd.notna(doj_val) else "",
+                "service_years": service_years,
+                "class_taught": safe_str(row.get("Class Taught")),
+                "appointed_level": safe_str(row.get("Appointed for Level")),
+                "subject_taught_1": safe_str(row.get("Sub Taught_1")),
+                "subject_taught_2": safe_str(row.get("Sub Taught_2")),
                 "trained_cwsn": safe_int(row.get("Trained Cwsn")),
                 "trained_comp": safe_int(row.get("Trained Comp")),
+                "training_received": safe_str(row.get("Training Recieved")),
+                "training_needed": safe_str(row.get("Training Needed")),
                 "training_nishtha": safe_int(row.get("Training NISHTHA")),
-                "aadhaar_verified": 1 if "Verified" in aadhaar_verified else 0,
+                "ctet_qualified": ctet_qualified,
+                "aadhaar_verified": aadhaar_verified,
                 "completion_status": safe_str(row.get("Completion Status")),
-                "created_at": datetime.now(timezone.utc)
+                "updated_at": datetime.now(timezone.utc),
             })
         
         if records:
-            # Insert in batches due to large size
+            await self.db.ctteacher_analytics.delete_many({})
             batch_size = 10000
             for i in range(0, len(records), batch_size):
                 batch = records[i:i+batch_size]
                 await self.db.ctteacher_analytics.insert_many(batch)
         
         self.stats["ctteacher"] = len(records)
-        print(f"  ✓ Loaded {len(records)} records")
+        print(f"  ✓ Loaded {len(records)} records (age/doj parsed for Retirement Risk)")
     
     async def etl_classrooms_toilets(self):
         """ETL for Classrooms & Toilets Details"""

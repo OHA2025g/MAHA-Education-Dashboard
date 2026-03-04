@@ -296,6 +296,8 @@ const CTTeacherDashboard = () => {
     fetchData();
   }, [fetchData]);
 
+  const [uploading, setUploading] = useState(false);
+
   const handleImport = async () => {
     const url = "https://customer-assets.emergentagent.com/job_e600aca7-d1b5-4003-a850-c6b4b2f65c48/artifacts/7h74ajig_8.%20CTTeacher%20Data%202025-26.xlsx";
     
@@ -311,6 +313,27 @@ const CTTeacherDashboard = () => {
       toast.error("Import failed: " + (error.response?.data?.detail || error.message));
       setImporting(false);
     }
+  };
+
+  const handleUploadFile = async (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+      toast.error("Please select an Excel file (.xlsx or .xls)");
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await axios.post(`${API}/ctteacher/import/upload`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success("Upload started. Data will load in the background. Refresh in 1–2 min and check Executive Dashboard → Teacher & Staffing → Risk Metrics.");
+      setTimeout(() => { fetchData(); setUploading(false); }, 60000);
+    } catch (error) {
+      toast.error("Upload failed: " + (error.response?.data?.detail || error.message));
+      setUploading(false);
+    }
+    e.target.value = "";
   };
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -477,17 +500,22 @@ const CTTeacherDashboard = () => {
           </h1>
           <p className="text-slate-500 mt-1">Teacher Data • 2025-26 • Pune District</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Button 
             variant="outline" 
             size="sm" 
             onClick={handleImport}
-            disabled={importing}
+            disabled={importing || uploading}
             data-testid="import-ctteacher-btn"
           >
             {importing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-            {importing ? "Importing..." : "Import Data"}
+            {importing ? "Importing..." : "Import from URL"}
           </Button>
+          <label className="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent h-9 px-4 cursor-pointer disabled:opacity-50">
+            <input type="file" accept=".xlsx,.xls" className="sr-only" onChange={handleUploadFile} disabled={importing || uploading} />
+            {uploading ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+            {uploading ? "Uploading..." : "Upload Excel (real data)"}
+          </label>
           <ExportPanel dashboardName="ctteacher" dashboardTitle="CT Teacher Analytics" />
           <Button variant="outline" size="sm" onClick={fetchData} data-testid="refresh-btn">
             <RefreshCw className="w-4 h-4 mr-2" />

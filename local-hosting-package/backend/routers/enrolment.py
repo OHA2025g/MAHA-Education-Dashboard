@@ -417,6 +417,85 @@ async def get_enrolment_block_wise(
     return block_data
 
 
+def _normalize_management_enrolment(raw: str) -> str:
+    """Normalize management label to: Government, Private Government Aided, Private Unaided, Other"""
+    if not raw:
+        return "Other"
+    s = str(raw).strip().lower()
+    if s in ("government", "govt", "govt.", "gov", "government.", "state govt", "central govt", "local body", "dept. of education"):
+        return "Government"
+    if s in ("private aided", "private government aided", "pvt aided", "pvt. aided", "govt aided", "government aided", "aided"):
+        return "Private Government Aided"
+    if s in ("private unaided", "pvt unaided", "pvt. unaided", "unaided"):
+        return "Private Unaided"
+    if "government" in s or "govt" in s:
+        return "Government"
+    if "aided" in s and "unaided" not in s:
+        return "Private Government Aided"
+    if "unaided" in s:
+        return "Private Unaided"
+    return "Other"
+
+
+@router.get("/management-wise")
+async def get_enrolment_management_wise(
+    district_code: Optional[str] = Query(None),
+    block_code: Optional[str] = Query(None),
+    udise_code: Optional[str] = Query(None),
+):
+    """Get enrolment grouped by school management: Government, Private Government Aided, Private Unaided"""
+    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code)
+    pipeline = prepend_match([
+        {
+            "$group": {
+                "_id": "$school_management",
+                "school_count": {"$sum": 1},
+                "total_enrolment": {"$sum": {"$ifNull": ["$total_enrolment", "$grand_total"]}},
+                "total_boys": {"$sum": {"$ifNull": ["$boys_enrolment", "$total_boys"]}},
+                "total_girls": {"$sum": {"$ifNull": ["$girls_enrolment", "$total_girls"]}},
+            }
+        }
+    ], scope_match)
+
+    cursor = db.enrolment_analytics.aggregate(pipeline)
+    rows = await cursor.to_list(length=50)
+
+    buckets = {
+        "Government": {"school_count": 0, "total_enrolment": 0, "total_boys": 0, "total_girls": 0},
+        "Private Government Aided": {"school_count": 0, "total_enrolment": 0, "total_boys": 0, "total_girls": 0},
+        "Private Unaided": {"school_count": 0, "total_enrolment": 0, "total_boys": 0, "total_girls": 0},
+        "Other": {"school_count": 0, "total_enrolment": 0, "total_boys": 0, "total_girls": 0},
+    }
+    for r in rows:
+        label = _normalize_management_enrolment(r.get("_id") or "")
+        if label not in buckets:
+            buckets[label] = {"school_count": 0, "total_enrolment": 0, "total_boys": 0, "total_girls": 0}
+        buckets[label]["school_count"] += r.get("school_count", 0) or 0
+        buckets[label]["total_enrolment"] += r.get("total_enrolment", 0) or 0
+        buckets[label]["total_boys"] += r.get("total_boys", 0) or 0
+        buckets[label]["total_girls"] += r.get("total_girls", 0) or 0
+
+    result = []
+    for label in ("Government", "Private Government Aided", "Private Unaided", "Other"):
+        b = buckets.get(label, {})
+        total = b.get("total_enrolment", 0) or 1
+        boys = b.get("total_boys", 0) or 0
+        girls = b.get("total_girls", 0) or 0
+        schools = max(b.get("school_count", 0), 1)
+        result.append({
+            "management": label,
+            "school_count": b.get("school_count", 0),
+            "total_enrolment": b.get("total_enrolment", 0),
+            "total_boys": boys,
+            "total_girls": girls,
+            "girls_pct": round((girls / total) * 100, 1) if total > 0 else 0,
+            "gender_parity_index": round(girls / boys, 2) if boys > 0 else 0,
+            "avg_school_size": round(b.get("total_enrolment", 0) / schools, 0),
+        })
+    result = [r for r in result if r["management"] != "Other" or r["school_count"] > 0]
+    return result
+
+
 @router.get("/retention-analysis")
 async def get_retention_analysis(
     district_code: Optional[str] = Query(None),
@@ -644,6 +723,9 @@ async def process_enrolment_file(file_path: str, filename: str, import_id: str):
                 school_col = next((c for c in df.columns if 'school_name' in c), None)
                 school_name = str(row[school_col]).strip() if school_col and pd.notna(row[school_col]) else ""
                 
+                mgmt_col = next((c for c in df.columns if 'management' in c), None)
+                school_management = str(row[mgmt_col]).strip() if mgmt_col and pd.notna(row[mgmt_col]) else ""
+                
                 def safe_int(val):
                     if pd.isna(val):
                         return 0
@@ -660,6 +742,7 @@ async def process_enrolment_file(file_path: str, filename: str, import_id: str):
                     "block_name": block_name,
                     "block_code": block_code,
                     "school_name": school_name,
+                    "school_management": school_management,
                     # PP3
                     "pp3_boys": safe_int(row.get("pp3boys", row.get("pp3_boys", 0))),
                     "pp3_girls": safe_int(row.get("pp3girls", row.get("pp3_girls", 0))),

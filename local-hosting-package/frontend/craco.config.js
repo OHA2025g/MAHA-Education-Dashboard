@@ -2,6 +2,10 @@
 const path = require("path");
 
 const webpackConfig = {
+  devServer: {
+    port: 8000,
+    allowedHosts: "all",
+  },
   eslint: {
     configure: {
       extends: ["plugin:react-hooks/recommended"],

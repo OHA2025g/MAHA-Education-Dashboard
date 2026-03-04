@@ -58,9 +58,13 @@ async def get_student_identity_compliance(
     district_code: Optional[str] = Query(None),
     block_code: Optional[str] = Query(None),
     udise_code: Optional[str] = Query(None),
+    district_name: Optional[str] = Query(None),
+    block_name: Optional[str] = Query(None),
 ):
     """Get Student Identity & Compliance KPIs from Aadhaar and APAAR data"""
-    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code)
+    dn = (district_name.strip().upper() or None) if (district_name and isinstance(district_name, str)) else None
+    bn = (block_name.strip().upper() or None) if (block_name and isinstance(block_name, str)) else None
+    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=dn, block_name=bn)
     
     # Get Aadhaar data - use correct field names from ETL
     aadhaar_pipeline = prepend_match([
@@ -185,9 +189,13 @@ async def get_infrastructure_facilities(
     district_code: Optional[str] = Query(None),
     block_code: Optional[str] = Query(None),
     udise_code: Optional[str] = Query(None),
+    district_name: Optional[str] = Query(None),
+    block_name: Optional[str] = Query(None),
 ):
     """Get Infrastructure & Facilities KPIs from Classrooms/Toilets and Infrastructure data"""
-    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code)
+    dn = (district_name.strip().upper() or None) if (district_name and isinstance(district_name, str)) else None
+    bn = (block_name.strip().upper() or None) if (block_name and isinstance(block_name, str)) else None
+    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=dn, block_name=bn)
     
     # Get Classrooms & Toilets data
     ct_pipeline = prepend_match([
@@ -340,30 +348,132 @@ async def get_teacher_staffing(
     district_code: Optional[str] = Query(None),
     block_code: Optional[str] = Query(None),
     udise_code: Optional[str] = Query(None),
+    district_name: Optional[str] = Query(None),
+    block_name: Optional[str] = Query(None),
+    debug: Optional[bool] = Query(None, description="Include sample docs with age/numeric_age/effective_age"),
 ):
-    """Get Teacher & Staffing Analytics KPIs"""
-    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    
+    """Get Teacher & Staffing Analytics KPIs. Matches scope by district/block code or name."""
+    # Normalize names to uppercase for match (many collections store "PUNE" not "Pune")
+    dn = (district_name.strip().upper() or None) if (district_name and isinstance(district_name, str)) else None
+    bn = (block_name.strip().upper() or None) if (block_name and isinstance(block_name, str)) else None
+    scope_match = build_scope_match(
+        district_code=district_code,
+        block_code=block_code,
+        udise_code=udise_code,
+        district_name=dn,
+        block_name=bn,
+    )
+    current_year = datetime.now().year
+
+    # Compute age and service_years from dob/doj when stored values are missing or zero (CT Teacher may store 0 if DOB/DoJ columns missing or parse failed)
+    # Use $convert with onError: 0 so empty string or invalid values do not break aggregation
+    # Coerce age to int so "58" (string from Excel) is treated as 58 for retirement risk (55+)
+    dob_str = {"$ifNull": ["$dob", ""]}
+    doj_str = {"$ifNull": ["$doj_service", ""]}
+    safe_int = lambda expr: {"$convert": {"input": expr, "to": "int", "onError": 0, "onNull": 0}}
+    numeric_age_expr = safe_int({"$ifNull": ["$age", 0]})
+    ct_add_fields = {
+        "$addFields": {
+            "numeric_age": numeric_age_expr,
+            "birth_year": {
+                "$let": {
+                    "vars": {
+                        "by_slash": {"$split": [dob_str, "/"]},
+                        "by_dash": {"$split": [dob_str, "-"]}
+                    },
+                    "in": {"$cond": {
+                        "if": {"$gte": [{"$size": "$$by_slash"}, 3]},
+                        "then": safe_int({"$arrayElemAt": ["$$by_slash", 2]}),
+                        "else": {"$cond": {
+                            "if": {"$gte": [{"$size": "$$by_dash"}, 1]},
+                            "then": safe_int({"$arrayElemAt": ["$$by_dash", 0]}),
+                            "else": 0
+                        }}
+                    }}
+                }
+            },
+            "doj_year": {
+                "$let": {
+                    "vars": {
+                        "by_slash": {"$split": [doj_str, "/"]},
+                        "by_dash": {"$split": [doj_str, "-"]}
+                    },
+                    "in": {"$cond": {
+                        "if": {"$gte": [{"$size": "$$by_slash"}, 3]},
+                        "then": safe_int({"$arrayElemAt": ["$$by_slash", 2]}),
+                        "else": {"$cond": {
+                            "if": {"$gte": [{"$size": "$$by_dash"}, 1]},
+                            "then": safe_int({"$arrayElemAt": ["$$by_dash", 0]}),
+                            "else": 0
+                        }}
+                    }}
+                }
+            }
+        }
+    }
+    # Second $addFields so effective_age/effective_service_years can reference numeric_age, birth_year, doj_year
+    ct_add_fields_2 = {
+        "$addFields": {
+            "effective_age": {
+                "$cond": {
+                    "if": {"$and": [{"$gte": ["$numeric_age", 18]}, {"$lte": ["$numeric_age", 75]}]},
+                    "then": "$numeric_age",
+                    "else": {"$cond": {"if": {"$gt": ["$birth_year", 0]}, "then": {"$subtract": [current_year, "$birth_year"]}, "else": 0}}
+                }
+            },
+            "effective_service_years": {
+                "$cond": {
+                    "if": {"$and": [{"$gte": [{"$ifNull": ["$service_years", 0]}, 0]}, {"$lte": [{"$ifNull": ["$service_years", 0]}, 45]}]},
+                    "then": "$service_years",
+                    "else": {"$cond": {"if": {"$and": [{"$gt": ["$doj_year", 1950]}, {"$lte": ["$doj_year", current_year]}]}, "then": {"$subtract": [current_year, "$doj_year"]}, "else": 0}}
+                }
+            }
+        }
+    }
+
     # Get CTTeacher data - data uses integers: 1=Yes, 2=No
     # Use teacher_code (not teacher_id) to match CTTeacher dashboard
     ct_pipeline = prepend_match([
+        ct_add_fields,
+        ct_add_fields_2,
         {"$group": {
             "_id": None,
             "total_records": {"$sum": 1},
             "unique_teachers": {"$addToSet": "$teacher_code"},
             "total_schools": {"$addToSet": "$udise_code"},
-            "aadhaar_verified": {"$sum": {"$cond": [{"$eq": ["$aadhaar_verified", "Verified From UIDAI against Name,Gender & DOB"]}, 1, 0]}},
+            "aadhaar_verified": {"$sum": {"$cond": [{"$or": [
+                {"$eq": ["$aadhaar_verified", "Verified From UIDAI against Name,Gender & DOB"]},
+                {"$eq": ["$aadhaar_verified", 1]},
+                {"$and": [
+                    {"$regexMatch": {"input": {"$ifNull": [{"$toString": "$aadhaar_verified"}, ""]}, "regex": "verified", "options": "i"}},
+                    {"$not": {"$regexMatch": {"input": {"$ifNull": [{"$toString": "$aadhaar_verified"}, ""]}, "regex": "not verified|unverified|pending", "options": "i"}}}
+                ]}
+            ]}, 1, 0]}},
             "ctet_qualified": {"$sum": {"$cond": [{"$eq": ["$ctet_qualified", 1]}, 1, 0]}},
             "nishtha_completed": {"$sum": {"$cond": [{"$eq": ["$training_nishtha", 1]}, 1, 0]}},
             "female_count": {"$sum": {"$cond": [{"$or": [{"$eq": ["$gender", "2-Female"]}, {"$eq": ["$gender", "Female"]}, {"$regexMatch": {"input": {"$toString": "$gender"}, "regex": "Female|2-"}}]}, 1, 0]}},
             "male_count": {"$sum": {"$cond": [{"$or": [{"$eq": ["$gender", "1-Male"]}, {"$eq": ["$gender", "Male"]}, {"$regexMatch": {"input": {"$toString": "$gender"}, "regex": "Male|1-"}}]}, 1, 0]}},
-            "retirement_risk": {"$sum": {"$cond": [{"$gte": ["$age", 55]}, 1, 0]}},
-            "total_age": {"$sum": "$age"},
-            "total_service_years": {"$sum": "$service_years"}
+            "retirement_risk": {"$sum": {"$cond": [{"$gte": ["$effective_age", 55]}, 1, 0]}},
+            "total_age": {"$sum": "$effective_age"},
+            "total_service_years": {"$sum": "$effective_service_years"},
+            "records_with_service_years": {"$sum": {"$cond": [{"$gt": ["$effective_service_years", 0]}, 1, 0]}}
         }}
     ], scope_match)
     ct_cursor = db.ctteacher_analytics.aggregate(ct_pipeline)
     ct_data = await ct_cursor.to_list(length=1)
+    
+    # Optional: run a sample pipeline to verify age/numeric_age/effective_age (for debugging retirement_risk)
+    sample_pipeline = prepend_match([
+        ct_add_fields,
+        ct_add_fields_2,
+        {"$project": {"teacher_code": 1, "age": 1, "numeric_age": 1, "birth_year": 1, "effective_age": 1}},
+        {"$limit": 5}
+    ], scope_match)
+    try:
+        sample_cursor = db.ctteacher_analytics.aggregate(sample_pipeline)
+        sample_docs = await sample_cursor.to_list(length=5)
+    except Exception:
+        sample_docs = []
     
     # Get Teacher analytics for comparison
     teacher_pipeline = prepend_match([
@@ -433,9 +543,11 @@ async def get_teacher_staffing(
     retirement_risk_count = ct.get("retirement_risk", 0)
     retirement_risk_pct = round(retirement_risk_count / total_records * 100, 1) if total_records > 0 else 0
     
-    # Calculate average service years from aggregated data
+    # Calculate average service years from aggregated data (use count of records with valid service years when available)
     total_service_years = ct.get("total_service_years", 0)
-    avg_service_years = round(total_service_years / total_records, 1) if total_records > 0 else 0
+    records_with_service = ct.get("records_with_service_years", 0) or 0
+    denom = records_with_service if records_with_service > 0 else total_records
+    avg_service_years = round(total_service_years / denom, 1) if denom > 0 else 0
     
     # Teacher growth (teachers_cy and teachers_py already calculated above)
     growth_rate = round((teachers_cy - teachers_py) / teachers_py * 100, 1) if teachers_py > 0 else 0
@@ -519,7 +631,7 @@ async def get_teacher_staffing(
     schools_with_teachers_list = await db.ctteacher_analytics.distinct("udise_code", schools_query)
     schools_with_teachers_count = len(schools_with_teachers_list) if schools_with_teachers_list else 0
     
-    # Get total schools in scope - use infrastructure_analytics to get all schools
+    # Get total schools in scope - prefer infrastructure_analytics; if empty, use ctteacher_analytics so teacher stats still show
     total_schools_pipeline = prepend_match([
         {"$group": {
             "_id": None,
@@ -528,12 +640,14 @@ async def get_teacher_staffing(
     ], scope_match)
     total_schools_cursor = db.infrastructure_analytics.aggregate(total_schools_pipeline)
     total_schools_data = await total_schools_cursor.to_list(length=1)
-    total_schools_all = len(total_schools_data[0].get("total_schools", [])) if total_schools_data and total_schools_data[0] else total_schools
+    total_schools_all = len(total_schools_data[0].get("total_schools", [])) if total_schools_data and total_schools_data[0] else None
+    if total_schools_all is None:
+        total_schools_all = max(total_schools, schools_with_teachers_count)
     
     # Schools with zero teachers = total schools - schools with at least 1 teacher
     zero_teacher_schools = max(0, total_schools_all - schools_with_teachers_count)
     
-    return {
+    out = {
         "summary": {
             "total_teachers": total_teachers,  # Use unique_teachers count (or total_records if unique is 0)
             "unique_teachers": unique_teachers,
@@ -599,6 +713,14 @@ async def get_teacher_staffing(
             "total_schools": total_schools_all
         }
     }
+    if debug and sample_docs:
+        from bson import ObjectId
+        def _serialize(d):
+            if not d:
+                return d
+            return {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in d.items()}
+        out["_debug_sample"] = [_serialize(d) for d in sample_docs]
+    return out
 
 
 @router.get("/schools-by-teacher-count")
@@ -728,9 +850,13 @@ async def get_operational_performance(
     district_code: Optional[str] = Query(None),
     block_code: Optional[str] = Query(None),
     udise_code: Optional[str] = Query(None),
+    district_name: Optional[str] = Query(None),
+    block_name: Optional[str] = Query(None),
 ):
     """Get Operational Performance KPIs from Data Entry and Dropbox data"""
-    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code)
+    dn = (district_name.strip().upper() or None) if (district_name and isinstance(district_name, str)) else None
+    bn = (block_name.strip().upper() or None) if (block_name and isinstance(block_name, str)) else None
+    scope_match = build_scope_match(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=dn, block_name=bn)
     
     # Get Data Entry Status - certified is "Yes"/"No" string
     de_pipeline = prepend_match([
@@ -880,120 +1006,131 @@ async def get_operational_performance(
     }
 
 
+def _default_shi_response():
+    return {
+        "summary": {"school_health_index": 0, "total_schools": 0, "total_students": 0, "rag_status": {"status": "Red", "color": "#ef4444"}},
+        "domain_scores": {
+            "identity_compliance": {"score": 0, "weight": 25, "rag": {"status": "Red", "color": "#ef4444"}},
+            "infrastructure": {"score": 0, "weight": 25, "rag": {"status": "Red", "color": "#ef4444"}},
+            "teacher_quality": {"score": 0, "weight": 25, "rag": {"status": "Red", "color": "#ef4444"}},
+            "operational": {"score": 0, "weight": 25, "rag": {"status": "Red", "color": "#ef4444"}},
+        },
+        "shi_breakdown": [],
+        "key_metrics": {},
+        "block_rankings": [],
+        "rag_distribution": {"green": 0, "amber": 0, "red": 0},
+    }
+
+
 @router.get("/school-health-index")
 async def get_school_health_index(
     district_code: Optional[str] = Query(None),
     block_code: Optional[str] = Query(None),
     udise_code: Optional[str] = Query(None),
+    district_name: Optional[str] = Query(None),
+    block_name: Optional[str] = Query(None),
 ):
-    """Get School Health Index (SHI) - Composite index from all domains"""
-    
-    # Get all domain data
-    identity = await get_student_identity_compliance(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    infrastructure = await get_infrastructure_facilities(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    teacher = await get_teacher_staffing(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    operational = await get_operational_performance(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    
-    # Extract key indices
-    identity_index = identity["summary"]["identity_compliance_index"]
-    infra_index = infrastructure["summary"]["infrastructure_index"]
-    teacher_index = teacher["summary"]["teacher_quality_index"]
-    operational_index = operational["summary"]["operational_index"]
-    
-    # Calculate School Health Index (SHI)
-    # SHI = Identity (25%) + Infrastructure (25%) + Teacher (20%) + Operational (20%) + Age Integrity (10%)
-    # Since we don't have age integrity separately, we'll use a simplified formula
-    shi = round(identity_index * 0.25 + infra_index * 0.25 + teacher_index * 0.25 + operational_index * 0.25, 1)
-    
-    # Determine RAG status
-    def get_rag(value):
-        if value >= 85:
-            return {"status": "Green", "color": "#10b981"}
-        elif value >= 70:
-            return {"status": "Amber", "color": "#f59e0b"}
-        else:
-            return {"status": "Red", "color": "#ef4444"}
-    
-    # Block-wise SHI calculation
-    # Simplified - using infrastructure block data as base
-    block_shi = []
-    for i, block in enumerate(infrastructure.get("block_performance", [])[:20]):
-        block_name = block.get("block_name")
-        block_code = block.get("block_code")
-        
-        # Find matching data from other domains
-        identity_block = next(
-            (b for b in identity.get("block_performance", []) if (block_code and b.get("block_code") == block_code) or b.get("block_name") == block_name),
-            {},
-        )
-        teacher_block = next(
-            (b for b in teacher.get("block_performance", []) if (block_code and b.get("block_code") == block_code) or b.get("block_name") == block_name),
-            {},
-        )
-        operational_block = next(
-            (b for b in operational.get("block_performance", []) if (block_code and b.get("block_code") == block_code) or b.get("block_name") == block_name),
-            {},
-        )
-        
-        # Calculate block SHI
-        block_identity = identity_block.get("aadhaar_pct", 85)
-        block_infra = block.get("classroom_health", 90)
-        block_teacher = teacher_block.get("ctet_pct", 10) * 2  # Scale up
-        block_ops = operational_block.get("completion_rate", 99)
-        
-        block_shi_value = round((block_identity * 0.25 + block_infra * 0.25 + block_teacher * 0.25 + block_ops * 0.25), 1)
-        
-        block_shi.append({
-            "rank": i + 1,
-            "block_code": block_code,
-            "block_name": block_name,
-            "shi_score": block_shi_value,
-            "identity_score": round(block_identity, 1),
-            "infra_score": round(block_infra, 1),
-            "teacher_score": round(block_teacher, 1),
-            "ops_score": round(block_ops, 1),
-            "rag": get_rag(block_shi_value)
-        })
-    
-    # Sort by SHI
-    block_shi.sort(key=lambda x: x["shi_score"], reverse=True)
-    for i, b in enumerate(block_shi):
-        b["rank"] = i + 1
-    
-    return {
-        "summary": {
-            "school_health_index": shi,
-            "total_schools": identity["summary"]["total_schools"],
-            "total_students": identity["summary"]["total_students"],
-            "rag_status": get_rag(shi)
-        },
-        "domain_scores": {
-            "identity_compliance": {"score": identity_index, "weight": 25, "rag": get_rag(identity_index)},
-            "infrastructure": {"score": infra_index, "weight": 25, "rag": get_rag(infra_index)},
-            "teacher_quality": {"score": teacher_index, "weight": 25, "rag": get_rag(teacher_index)},
-            "operational": {"score": operational_index, "weight": 25, "rag": get_rag(operational_index)}
-        },
-        "shi_breakdown": [
-            {"domain": "Student Identity", "score": identity_index, "weight": 25, "contribution": round(identity_index * 0.25, 1), "color": "#3b82f6"},
-            {"domain": "Infrastructure", "score": infra_index, "weight": 25, "contribution": round(infra_index * 0.25, 1), "color": "#10b981"},
-            {"domain": "Teacher Quality", "score": teacher_index, "weight": 25, "contribution": round(teacher_index * 0.25, 1), "color": "#8b5cf6"},
-            {"domain": "Operational", "score": operational_index, "weight": 25, "contribution": round(operational_index * 0.25, 1), "color": "#f59e0b"}
-        ],
-        "key_metrics": {
-            "aadhaar_coverage": identity["aadhaar_metrics"]["aadhaar_coverage_pct"],
-            "apaar_coverage": identity["apaar_metrics"]["apaar_coverage_pct"],
-            "classroom_health": infrastructure["classroom_metrics"]["classroom_health_pct"],
-            "toilet_functional": infrastructure["toilet_metrics"]["functional_pct"],
-            "teacher_quality": teacher["summary"]["teacher_quality_index"],
-            "data_completion": operational["data_entry_metrics"]["completion_rate"]
-        },
-        "block_rankings": block_shi,
-        "rag_distribution": {
-            "green": len([b for b in block_shi if b["rag"]["status"] == "Green"]),
-            "amber": len([b for b in block_shi if b["rag"]["status"] == "Amber"]),
-            "red": len([b for b in block_shi if b["rag"]["status"] == "Red"])
+    """Get School Health Index (SHI) - Composite index from all domains. Returns default on any error."""
+    try:
+        identity = await get_student_identity_compliance(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+        infrastructure = await get_infrastructure_facilities(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+        teacher = await get_teacher_staffing(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+        operational = await get_operational_performance(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+    except Exception:
+        return _default_shi_response()
+
+    try:
+        identity_index = identity.get("summary", {}).get("identity_compliance_index", 0)
+        infra_index = infrastructure.get("summary", {}).get("infrastructure_index", 0)
+        teacher_index = teacher.get("summary", {}).get("teacher_quality_index", 0)
+        operational_index = operational.get("summary", {}).get("operational_index", 0)
+
+        # Calculate School Health Index (SHI)
+        # SHI = Identity (25%) + Infrastructure (25%) + Teacher (20%) + Operational (20%)
+        shi = round(identity_index * 0.25 + infra_index * 0.25 + teacher_index * 0.25 + operational_index * 0.25, 1)
+
+        def get_rag(value):
+            if value >= 85:
+                return {"status": "Green", "color": "#10b981"}
+            elif value >= 70:
+                return {"status": "Amber", "color": "#f59e0b"}
+            else:
+                return {"status": "Red", "color": "#ef4444"}
+
+        # Block-wise SHI calculation
+        block_shi = []
+        for i, block in enumerate(infrastructure.get("block_performance", [])[:20]):
+            block_name = block.get("block_name")
+            block_code = block.get("block_code")
+            identity_block = next(
+                (b for b in identity.get("block_performance", []) if (block_code and b.get("block_code") == block_code) or b.get("block_name") == block_name),
+                {},
+            )
+            teacher_block = next(
+                (b for b in teacher.get("block_performance", []) if (block_code and b.get("block_code") == block_code) or b.get("block_name") == block_name),
+                {},
+            )
+            operational_block = next(
+                (b for b in operational.get("block_performance", []) if (block_code and b.get("block_code") == block_code) or b.get("block_name") == block_name),
+                {},
+            )
+            block_identity = identity_block.get("aadhaar_pct", 85)
+            block_infra = block.get("classroom_health", 90)
+            block_teacher = teacher_block.get("ctet_pct", 10) * 2
+            block_ops = operational_block.get("completion_rate", 99)
+            block_shi_value = round((block_identity * 0.25 + block_infra * 0.25 + block_teacher * 0.25 + block_ops * 0.25), 1)
+            block_shi.append({
+                "rank": i + 1,
+                "block_code": block_code,
+                "block_name": block_name,
+                "shi_score": block_shi_value,
+                "identity_score": round(block_identity, 1),
+                "infra_score": round(block_infra, 1),
+                "teacher_score": round(block_teacher, 1),
+                "ops_score": round(block_ops, 1),
+                "rag": get_rag(block_shi_value)
+            })
+
+        block_shi.sort(key=lambda x: x["shi_score"], reverse=True)
+        for i, b in enumerate(block_shi):
+            b["rank"] = i + 1
+
+        return {
+            "summary": {
+                "school_health_index": shi,
+                "total_schools": identity.get("summary", {}).get("total_schools", 0),
+                "total_students": identity.get("summary", {}).get("total_students", 0),
+                "rag_status": get_rag(shi)
+            },
+            "domain_scores": {
+                "identity_compliance": {"score": identity_index, "weight": 25, "rag": get_rag(identity_index)},
+                "infrastructure": {"score": infra_index, "weight": 25, "rag": get_rag(infra_index)},
+                "teacher_quality": {"score": teacher_index, "weight": 25, "rag": get_rag(teacher_index)},
+                "operational": {"score": operational_index, "weight": 25, "rag": get_rag(operational_index)}
+            },
+            "shi_breakdown": [
+                {"domain": "Student Identity", "score": identity_index, "weight": 25, "contribution": round(identity_index * 0.25, 1), "color": "#3b82f6"},
+                {"domain": "Infrastructure", "score": infra_index, "weight": 25, "contribution": round(infra_index * 0.25, 1), "color": "#10b981"},
+                {"domain": "Teacher Quality", "score": teacher_index, "weight": 25, "contribution": round(teacher_index * 0.25, 1), "color": "#8b5cf6"},
+                {"domain": "Operational", "score": operational_index, "weight": 25, "contribution": round(operational_index * 0.25, 1), "color": "#f59e0b"}
+            ],
+            "key_metrics": {
+                "aadhaar_coverage": identity.get("aadhaar_metrics", {}).get("aadhaar_coverage_pct", 0),
+                "apaar_coverage": identity.get("apaar_metrics", {}).get("apaar_coverage_pct", 0),
+                "classroom_health": infrastructure.get("classroom_metrics", {}).get("classroom_health_pct", 0),
+                "toilet_functional": infrastructure.get("toilet_metrics", {}).get("functional_pct", 0),
+                "teacher_quality": teacher.get("summary", {}).get("teacher_quality_index", 0),
+                "data_completion": operational.get("data_entry_metrics", {}).get("completion_rate", 0)
+            },
+            "block_rankings": block_shi,
+            "rag_distribution": {
+                "green": len([b for b in block_shi if b.get("rag", {}).get("status") == "Green"]),
+                "amber": len([b for b in block_shi if b.get("rag", {}).get("status") == "Amber"]),
+                "red": len([b for b in block_shi if b.get("rag", {}).get("status") == "Red"])
+            }
         }
-    }
+    except Exception:
+        return _default_shi_response()
 
 
 @router.get("/overview")
@@ -1001,53 +1138,97 @@ async def get_executive_overview(
     district_code: Optional[str] = Query(None),
     block_code: Optional[str] = Query(None),
     udise_code: Optional[str] = Query(None),
+    district_name: Optional[str] = Query(None),
+    block_name: Optional[str] = Query(None),
 ):
-    """Get complete executive overview with all domain KPIs"""
-    
-    identity = await get_student_identity_compliance(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    infrastructure = await get_infrastructure_facilities(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    teacher = await get_teacher_staffing(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    operational = await get_operational_performance(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    shi = await get_school_health_index(district_code=district_code, block_code=block_code, udise_code=udise_code)
-    
+    """Get complete executive overview with all domain KPIs. Resilient to individual domain failures."""
+    empty_identity = {"summary": {"total_schools": 0, "total_students": 0, "identity_compliance_index": 0}, "aadhaar_metrics": {"aadhaar_coverage_pct": 0}, "apaar_metrics": {"apaar_coverage_pct": 0}}
+    empty_infra = {"summary": {"total_classrooms": 0, "total_toilets": 0, "infrastructure_index": 0}, "classroom_metrics": {"classroom_health_pct": 0}, "toilet_metrics": {"functional_pct": 0}}
+    empty_teacher = {"summary": {"teacher_quality_index": 0, "total_teachers": 0}, "compliance_metrics": {"ctet_pct": 0}}
+    empty_operational = {"summary": {"operational_index": 0}, "data_entry_metrics": {"completion_rate": 0, "certification_rate": 0}}
+    empty_shi = {"summary": {"school_health_index": 0, "rag_status": {"status": "Red", "color": "#ef4444"}}}
+    try:
+        identity = await get_student_identity_compliance(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+    except Exception:
+        identity = empty_identity
+    try:
+        infrastructure = await get_infrastructure_facilities(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+    except Exception:
+        infrastructure = empty_infra
+    try:
+        teacher = await get_teacher_staffing(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+    except Exception:
+        teacher = empty_teacher
+    try:
+        operational = await get_operational_performance(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+    except Exception:
+        operational = empty_operational
+    try:
+        shi = await get_school_health_index(district_code=district_code, block_code=block_code, udise_code=udise_code, district_name=district_name, block_name=block_name)
+    except Exception:
+        shi = empty_shi
     return {
-        "shi": shi["summary"],
+        "shi": shi.get("summary", empty_shi["summary"]),
         "domain_summary": {
             "identity": {
-                "index": identity["summary"]["identity_compliance_index"],
-                "aadhaar_pct": identity["aadhaar_metrics"]["aadhaar_coverage_pct"],
-                "apaar_pct": identity["apaar_metrics"]["apaar_coverage_pct"]
+                "index": identity.get("summary", {}).get("identity_compliance_index", 0),
+                "aadhaar_pct": identity.get("aadhaar_metrics", {}).get("aadhaar_coverage_pct", 0),
+                "apaar_pct": identity.get("apaar_metrics", {}).get("apaar_coverage_pct", 0),
             },
             "infrastructure": {
-                "index": infrastructure["summary"]["infrastructure_index"],
-                "classroom_health": infrastructure["classroom_metrics"]["classroom_health_pct"],
-                "toilet_functional": infrastructure["toilet_metrics"]["functional_pct"]
+                "index": infrastructure.get("summary", {}).get("infrastructure_index", 0),
+                "classroom_health": infrastructure.get("classroom_metrics", {}).get("classroom_health_pct", 0),
+                "toilet_functional": infrastructure.get("toilet_metrics", {}).get("functional_pct", 0),
             },
             "teacher": {
-                "index": teacher["summary"]["teacher_quality_index"],
-                "total_teachers": teacher["summary"]["total_teachers"],
-                "ctet_pct": teacher["compliance_metrics"]["ctet_pct"]
+                "index": teacher.get("summary", {}).get("teacher_quality_index", 0),
+                "total_teachers": teacher.get("summary", {}).get("total_teachers", 0),
+                "ctet_pct": teacher.get("compliance_metrics", {}).get("ctet_pct", 0),
             },
             "operational": {
-                "index": operational["summary"]["operational_index"],
-                "completion_rate": operational["data_entry_metrics"]["completion_rate"],
-                "certification_rate": operational["data_entry_metrics"]["certification_rate"]
-            }
+                "index": operational.get("summary", {}).get("operational_index", 0),
+                "completion_rate": operational.get("data_entry_metrics", {}).get("completion_rate", 0),
+                "certification_rate": operational.get("data_entry_metrics", {}).get("certification_rate", 0),
+            },
         },
         "quick_stats": {
-            "total_schools": identity["summary"]["total_schools"],
-            "total_students": identity["summary"]["total_students"],
-            "total_teachers": teacher["summary"]["total_teachers"],
-            "total_classrooms": infrastructure["summary"]["total_classrooms"],
-            "total_toilets": infrastructure["summary"]["total_toilets"]
+            "total_schools": identity.get("summary", {}).get("total_schools", 0),
+            "total_students": identity.get("summary", {}).get("total_students", 0),
+            "total_teachers": teacher.get("summary", {}).get("total_teachers", 0),
+            "total_classrooms": infrastructure.get("summary", {}).get("total_classrooms", 0),
+            "total_toilets": infrastructure.get("summary", {}).get("total_toilets", 0),
         },
         "alerts": [
-            {"type": "warning", "message": f"APAAR Coverage at {identity['apaar_metrics']['apaar_coverage_pct']}%", "domain": "Identity"} if identity["apaar_metrics"]["apaar_coverage_pct"] < 90 else None,
-            {"type": "info", "message": f"Teacher CTET Rate at {teacher['compliance_metrics']['ctet_pct']}%", "domain": "Teacher"} if teacher["compliance_metrics"]["ctet_pct"] < 50 else None,
-            {"type": "success", "message": f"Data Completion at {operational['data_entry_metrics']['completion_rate']}%", "domain": "Operational"} if operational["data_entry_metrics"]["completion_rate"] >= 99 else None
-        ]
+            {"type": "warning", "message": f"APAAR Coverage at {identity.get('apaar_metrics', {}).get('apaar_coverage_pct', 0)}%", "domain": "Identity"} if identity.get("apaar_metrics", {}).get("apaar_coverage_pct", 0) < 90 else None,
+            {"type": "info", "message": f"Teacher CTET Rate at {teacher.get('compliance_metrics', {}).get('ctet_pct', 0)}%", "domain": "Teacher"} if teacher.get("compliance_metrics", {}).get("ctet_pct", 0) < 50 else None,
+            {"type": "success", "message": f"Data Completion at {operational.get('data_entry_metrics', {}).get('completion_rate', 0)}%", "domain": "Operational"} if operational.get("data_entry_metrics", {}).get("completion_rate", 0) >= 99 else None,
+        ],
     }
 
+
+
+def _default_map_response():
+    all_d = [
+        "Ahmadnagar", "Akola", "Amravati", "Aurangabad", "Bhandara", "Bid", "Buldana",
+        "Chandrapur", "Dhule", "Gadchiroli", "Gondiya", "Hingoli", "Jalgaon", "Jalna",
+        "Kolhapur", "Latur", "Mumbai", "Mumbai Suburban", "Nagpur", "Nanded", "Nandurbar",
+        "Nashik", "Osmanabad", "Palghar", "Parbhani", "Pune", "Raigarh", "Ratnagiri",
+        "Sangli", "Satara", "Sindhudurg", "Solapur", "Thane", "Wardha", "Washim", "Yavatmal"
+    ]
+    return {
+        "districts": [
+            {"district_name": d, "has_data": False, "total_schools": 0, "total_students": 0, "total_teachers": 0, "metrics": {"shi": None, "aadhaar_coverage": None, "apaar_coverage": None, "infrastructure_index": None}}
+            for d in all_d
+        ],
+        "summary": {"total_districts": len(all_d), "districts_with_data": 0, "districts_no_data": len(all_d), "avg_shi": 0, "avg_aadhaar": 0, "avg_apaar": 0},
+        "metric_options": [
+            {"key": "shi", "label": "School Health Index", "unit": "%"},
+            {"key": "aadhaar_coverage", "label": "Aadhaar Coverage", "unit": "%"},
+            {"key": "apaar_coverage", "label": "APAAR Generation", "unit": "%"},
+            {"key": "infrastructure_index", "label": "Infrastructure Index", "unit": "%"},
+            {"key": "ctet_qualified_pct", "label": "CTET Qualified Teachers", "unit": "%"}
+        ]
+    }
 
 
 @router.get("/district-map-data")
@@ -1239,4 +1420,137 @@ async def get_district_map_data(
             {"key": "ctet_qualified_pct", "label": "CTET Qualified Teachers", "unit": "%"}
         ]
     }
+
+
+DEMO_SCOPE = {"district_code": "2725", "district_name": "PUNE", "block_code": "001", "block_name": "Haveli", "udise_code": "27250100101", "school_name": "Demo School"}
+
+
+@router.post("/seed-demo-data")
+async def seed_executive_demo_data():
+    """Insert minimal documents so Executive Dashboard (Overview, Teacher, SHI) show sample data. Idempotent: uses demo scope and replaces demo docs."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    try:
+        # Remove existing demo docs (same scope) so we don't duplicate
+        demo_filter = {"district_code": DEMO_SCOPE["district_code"], "block_code": DEMO_SCOPE["block_code"], "udise_code": DEMO_SCOPE["udise_code"]}
+        await db.aadhaar_analytics.delete_many(demo_filter)
+        await db.apaar_analytics.delete_many(demo_filter)
+        await db.infrastructure_analytics.delete_many(demo_filter)
+        await db.ctteacher_analytics.delete_many(demo_filter)
+        await db.teacher_analytics.delete_many(demo_filter)
+        await db.classrooms_toilets.delete_many(demo_filter)
+        await db.data_entry_analytics.delete_many(demo_filter)
+        await db.enrolment_analytics.delete_many(demo_filter)
+        await db.dropbox_analytics.delete_many(demo_filter)
+
+        base = {**DEMO_SCOPE}
+
+        # One school row so identity/infra/operational aggregations return non-zero
+        await db.aadhaar_analytics.insert_one({
+            **base,
+            "total_enrolment": 500,
+            "aadhaar_passed": 450,
+            "aadhaar_failed": 50,
+            "name_match": 440,
+            "mbu_pending_5_15": 5,
+            "mbu_pending_15_above": 5,
+            "exception_rate": 0.02,
+        })
+        await db.apaar_analytics.insert_one({
+            **base,
+            "total_student": 500,
+            "total_generated": 400,
+            "total_not_applied": 50,
+            "total_failed": 50,
+        })
+        await db.infrastructure_analytics.insert_one({
+            **base,
+            "tap_water": 1,
+            "water_purifier": 1,
+            "water_quality_tested": 1,
+            "rain_water_harvesting": 1,
+            "ramp": True,
+            "medical_checkup": True,
+            "first_aid": True,
+        })
+        await db.classrooms_toilets.insert_one({
+            **base,
+            "classrooms_instructional": 12,
+            "pucca_good": 10,
+            "part_pucca_good": 2,
+            "pucca_minor": 0,
+            "pucca_major": 0,
+            "part_pucca_minor": 0,
+            "part_pucca_major": 0,
+            "boys_toilets_total": 8,
+            "girls_toilets_total": 8,
+            "boys_toilets_functional": 8,
+            "girls_toilets_functional": 8,
+            "electricity": 1,
+            "library_available": 1,
+            "computer_labs": 1,
+            "handwash_points": 4,
+        })
+        await db.ctteacher_analytics.insert_one({
+            **base,
+            "teacher_code": "T001",
+            "aadhaar_verified": "Verified From UIDAI against Name,Gender & DOB",
+            "ctet_qualified": 1,
+            "training_nishtha": 1,
+            "gender": "2-Female",
+            "dob": "15/06/1985",
+            "doj_service": "01/06/2010",
+            "age": 39,
+            "service_years": 15,
+            "professional_qualification": "B.Ed",
+            "academic_qualification": "Post graduate",
+        })
+        await db.ctteacher_analytics.insert_one({
+            **base,
+            "teacher_code": "T002",
+            "aadhaar_verified": "Verified From UIDAI against Name,Gender & DOB",
+            "ctet_qualified": 0,
+            "training_nishtha": 1,
+            "gender": "1-Male",
+            "dob": "01/04/1968",
+            "doj_service": "01/06/1990",
+            "age": 56,
+            "service_years": 34,
+            "professional_qualification": "B.Ed",
+            "academic_qualification": "Graduate",
+        })
+        await db.teacher_analytics.insert_one({
+            **base,
+            "teacher_tot_cy": 5,
+            "teacher_tot_py": 4,
+            "tot_teacher_tr_ctet_cy": 3,
+            "tot_teacher_tr_cwsn_cy": 2,
+            "tot_teacher_tr_computers_cy": 4,
+        })
+        await db.data_entry_analytics.insert_one({
+            **base,
+            "total_students": 500,
+            "completed": 495,
+            "not_started": 3,
+            "in_progress": 2,
+            "certified": "Yes",
+            "repeaters": 10,
+        })
+        await db.enrolment_analytics.insert_one({
+            **base,
+            "total_enrolment": 500,
+            "girls_enrolment": 240,
+            "boys_enrolment": 260,
+        })
+        await db.dropbox_analytics.insert_one({
+            **base,
+            "total_remarks": 500,
+            "dropout": 5,
+            "migration": 2,
+            "class12_passed": 450,
+            "wrong_entry": 3,
+        })
+        return {"ok": True, "message": "Demo data seeded. Refresh the Executive Dashboard."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

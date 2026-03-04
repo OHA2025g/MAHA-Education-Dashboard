@@ -21,6 +21,61 @@ const BACKEND_URL = getBackendUrl();
 const API = `${BACKEND_URL}/api`;
 
 import MetricInfoButton from "@/components/MetricInfoButton";
+import { Link } from "react-router-dom";
+
+/** Default identity payload when API fails or no data - allows dashboard to render with empty state. */
+const DEFAULT_IDENTITY = {
+  summary: { total_schools: 0, total_students: 0, aadhaar_coverage: 0, apaar_coverage: 0, identity_compliance_index: 0 },
+  aadhaar_metrics: { aadhaar_available: 0, aadhaar_coverage_pct: 0, name_mismatch_count: 0, name_mismatch_rate: 0, mbu_pending: 0, exception_count: 0, exception_rate: 0 },
+  apaar_metrics: { total_students: 0, apaar_generated: 0, apaar_coverage_pct: 0, apaar_pending: 0, apaar_not_applied: 0, apaar_failed: 0 },
+  compliance_breakdown: [],
+  block_performance: [],
+};
+
+/** Default SHI payload when API fails or no data. */
+const DEFAULT_SHI = {
+  summary: { school_health_index: 0, total_schools: 0, total_students: 0, rag_status: { status: "Red", color: "#ef4444" } },
+  domain_scores: {
+    identity_compliance: { score: 0, weight: 25, rag: { status: "Red", color: "#ef4444" } },
+    infrastructure: { score: 0, weight: 25, rag: { status: "Red", color: "#ef4444" } },
+    teacher_quality: { score: 0, weight: 25, rag: { status: "Red", color: "#ef4444" } },
+    operational: { score: 0, weight: 25, rag: { status: "Red", color: "#ef4444" } },
+  },
+  shi_breakdown: [],
+  block_rankings: [],
+  rag_distribution: { green: 0, amber: 0, red: 0 },
+  key_metrics: {},
+};
+
+/** Default infrastructure payload when API fails or no data. */
+const DEFAULT_INFRASTRUCTURE = {
+  summary: { infrastructure_index: 0 },
+  classroom_metrics: { total_classrooms: 0, classroom_health_pct: 0 },
+  toilet_metrics: { functional_pct: 0, water_coverage_pct: 0 },
+  index_breakdown: [],
+  water_safety: { tap_water_pct: 0, purified_water_pct: 0, water_tested_pct: 0, rainwater_harvest_pct: 0 },
+  block_performance: [],
+};
+
+/** Default teacher payload when API fails or no data. */
+const DEFAULT_TEACHER = {
+  summary: { total_teachers: 0, teacher_quality_index: 0 },
+  school_teacher_distribution: { zero_teacher_schools: 0, one_teacher_schools: 0, two_teacher_schools: 0 },
+  risk_metrics: { retirement_risk_pct: 0, retirement_risk_count: 0, growth_rate: 0 },
+  demographic_metrics: { avg_service_years: 0, gender_parity_index: 0 },
+  quality_breakdown: [],
+  qualification_metrics: null,
+  block_performance: [],
+};
+
+/** Default operational payload when API fails or no data. */
+const DEFAULT_OPERATIONAL = {
+  summary: { total_students: 0, operational_index: 0 },
+  data_entry_metrics: { completion_rate: 0, certification_rate: 0 },
+  dropbox_metrics: { data_accuracy: 0 },
+  index_breakdown: [],
+  enrolment_metrics: { girls_enrolment: 0, boys_enrolment: 0 },
+};
 
 const KPICard = ({ label, value, suffix = "", icon: Icon, color = "blue", description, size = "normal", metricKey = null, onClick = null }) => {
   const colors = { 
@@ -188,26 +243,41 @@ const ExecutiveDashboard = () => {
         requestParams.school_name = scope.schoolName.trim();
       }
 
-      const [overviewRes, identityRes, infraRes, teacherRes, opsRes, shiRes, mapRes] = await Promise.all([
-        axios.get(`${API}/executive/overview`, { params: requestParams }),
-        axios.get(`${API}/executive/student-identity`, { params: requestParams }),
-        axios.get(`${API}/executive/infrastructure-facilities`, { params: requestParams }),
-        axios.get(`${API}/executive/teacher-staffing`, { params: requestParams }),
-        axios.get(`${API}/executive/operational-performance`, { params: requestParams }),
-        axios.get(`${API}/executive/school-health-index`, { params: requestParams }),
-        axios.get(`${API}/executive/district-map-data`, { params: requestParams })
-      ]);
-      setOverview(overviewRes.data);
-      setIdentity(identityRes.data);
-      setInfrastructure(infraRes.data);
-      setTeacher(teacherRes.data);
-      setOperational(opsRes.data);
-      setShi(shiRes.data);
-      setMapData(mapRes.data);
+      const endpoints = [
+        { key: "overview", url: `${API}/executive/overview` },
+        { key: "identity", url: `${API}/executive/student-identity` },
+        { key: "infrastructure", url: `${API}/executive/infrastructure-facilities` },
+        { key: "teacher", url: `${API}/executive/teacher-staffing` },
+        { key: "operational", url: `${API}/executive/operational-performance` },
+        { key: "shi", url: `${API}/executive/school-health-index` },
+        { key: "map", url: `${API}/executive/district-map-data` },
+      ];
+      const results = await Promise.allSettled(
+        endpoints.map((e) => axios.get(e.url, { params: requestParams }))
+      );
+      const getData = (idx) => (results[idx].status === "fulfilled" ? results[idx].value?.data : null);
+      setOverview(getData(0));
+      setIdentity(getData(1) || DEFAULT_IDENTITY);
+      setInfrastructure(getData(2) || DEFAULT_INFRASTRUCTURE);
+      setTeacher(getData(3) || DEFAULT_TEACHER);
+      setOperational(getData(4) || DEFAULT_OPERATIONAL);
+      setShi(getData(5) || DEFAULT_SHI);
+      setMapData(getData(6));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed > 2) {
+        toast.warning(`Executive dashboard loaded with ${failed} section(s) missing. Import data for full view.`);
+      } else if (failed > 0) {
+        toast.info(`Some sections have no data yet. Use Data Import to add more sources.`);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
       console.error("Error details:", error.response?.data || error.message);
       toast.error("Failed to load executive dashboard");
+      setIdentity(DEFAULT_IDENTITY);
+      setInfrastructure(DEFAULT_INFRASTRUCTURE);
+      setTeacher(DEFAULT_TEACHER);
+      setOperational(DEFAULT_OPERATIONAL);
+      setShi(DEFAULT_SHI);
     } finally {
       setLoading(false);
     }
@@ -308,7 +378,97 @@ const ExecutiveDashboard = () => {
   };
 
   if (loading) return <div className="flex items-center justify-center h-96"><div className="loading-spinner" /></div>;
-  if (!shi || !identity) return <div className="text-center py-12"><p className="text-slate-500">No data available. Please import data first.</p></div>;
+
+  // No data: APIs failed (null) or backend returned all zeros (e.g. no data in DB or scope has no matches)
+  const totalSchools = overview?.quick_stats?.total_schools ?? identity?.summary?.total_schools ?? 0;
+  const totalStudents = identity?.summary?.total_students ?? 0;
+  const shiValue = shi?.summary?.school_health_index ?? 0;
+  const hasNoData =
+    (!overview && !identity?.summary?.total_students && !shi?.summary?.school_health_index) ||
+    (totalSchools === 0 && totalStudents === 0 && shiValue === 0);
+
+  if (hasNoData) {
+    const handleSeedDemo = async () => {
+      try {
+        await axios.post(`${API}/executive/seed-demo-data`);
+        toast.success("Demo data loaded. Refreshing…");
+        await fetchData();
+      } catch (err) {
+        toast.error(err.response?.data?.detail || "Failed to load demo data");
+      }
+    };
+    return (
+      <div className="text-center py-16 px-4 max-w-lg mx-auto">
+        <h2 className="text-xl font-semibold text-slate-800 mb-2">No data for Executive Dashboard</h2>
+        <p className="text-slate-600 mb-4">
+          Overview, Teachers &amp; Staffing, and School Health Index need data from the sources below.
+        </p>
+        <p className="text-slate-500 text-sm mb-6">
+          Go to <strong>Data Import</strong> and import: <strong>Aadhaar</strong>, <strong>APAAR</strong>,{" "}
+          <strong>Infrastructure / Classrooms &amp; Toilets</strong>, <strong>CT Teacher</strong>, and{" "}
+          <strong>Data Entry</strong>. If you have a district/block selected, try clearing the scope filter to see state-level data.
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button asChild variant="default">
+            <Link to="/data-import">Go to Data Import</Link>
+          </Button>
+          <Button variant="secondary" onClick={handleSeedDemo}>
+            Load demo data
+          </Button>
+          <Button variant="outline" onClick={fetchData}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Safe refs so we never read .summary (or other props) on null when APIs fail or state is pending
+  const safeShi = shi ?? DEFAULT_SHI;
+  const safeIdentity = identity ?? DEFAULT_IDENTITY;
+  const safeInfrastructure = infrastructure ?? DEFAULT_INFRASTRUCTURE;
+  const safeTeacher = teacher ?? DEFAULT_TEACHER;
+  const safeOperational = operational ?? DEFAULT_OPERATIONAL;
+  // Optional chaining on summary so we never throw even if API returns malformed data
+  const shiSummary = safeShi?.summary ?? {};
+  const identitySummary = safeIdentity?.summary ?? {};
+  const infraSummary = safeInfrastructure?.summary ?? {};
+  const teacherSummary = safeTeacher?.summary ?? {};
+  const operationalSummary = safeOperational?.summary ?? {};
+
+  // When overview API fails or returns null, build overview from domain APIs so Overview tab still shows data
+  const effectiveOverview = overview ?? {
+    quick_stats: {
+      total_schools: identitySummary.total_schools ?? safeInfrastructure?.summary?.total_schools ?? 0,
+      total_students: identitySummary.total_students ?? operationalSummary.total_students ?? 0,
+      total_teachers: teacherSummary.total_teachers ?? 0,
+      total_classrooms: safeInfrastructure?.classroom_metrics?.total_classrooms ?? safeInfrastructure?.summary?.total_classrooms ?? 0,
+      total_toilets: safeInfrastructure?.summary?.total_toilets ?? 0,
+    },
+    domain_summary: {
+      identity: {
+        index: identitySummary.identity_compliance_index ?? 0,
+        aadhaar_pct: safeIdentity?.aadhaar_metrics?.aadhaar_coverage_pct ?? 0,
+        apaar_pct: safeIdentity?.apaar_metrics?.apaar_coverage_pct ?? 0,
+      },
+      infrastructure: {
+        index: infraSummary.infrastructure_index ?? 0,
+        classroom_health: safeInfrastructure?.classroom_metrics?.classroom_health_pct ?? 0,
+        toilet_functional: safeInfrastructure?.toilet_metrics?.functional_pct ?? 0,
+      },
+      teacher: {
+        index: teacherSummary.teacher_quality_index ?? 0,
+        total_teachers: teacherSummary.total_teachers ?? 0,
+        ctet_pct: safeTeacher?.compliance_metrics?.ctet_pct ?? 0,
+      },
+      operational: {
+        index: operationalSummary.operational_index ?? 0,
+        completion_rate: safeOperational?.data_entry_metrics?.completion_rate ?? 0,
+        certification_rate: safeOperational?.data_entry_metrics?.certification_rate ?? 0,
+      },
+    },
+  };
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="executive-dashboard">
@@ -343,10 +503,10 @@ const ExecutiveDashboard = () => {
                 <div className="flex items-center gap-6">
                   <div className="relative">
                     <GaugeChart 
-                      value={shi.summary.school_health_index} 
+                      value={shiSummary.school_health_index ?? 0} 
                       label="" 
                       size="large" 
-                      color={shi.summary.rag_status.color}
+                      color={shiSummary.rag_status?.color ?? "#ef4444"}
                       metricKey="school_health_index"
                     />
                   </div>
@@ -360,26 +520,26 @@ const ExecutiveDashboard = () => {
                       />
                     </div>
                     <p className="text-slate-500">Composite score across all domains</p>
-                    <Badge className={`mt-2 ${shi.summary.rag_status.status === 'Green' ? 'bg-emerald-100 text-emerald-700' : shi.summary.rag_status.status === 'Amber' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                      {shi.summary.rag_status.status} Status
+                    <Badge className={`mt-2 ${shiSummary.rag_status?.status === 'Green' ? 'bg-emerald-100 text-emerald-700' : shiSummary.rag_status?.status === 'Amber' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                      {shiSummary.rag_status?.status ?? 'Red'} Status
                     </Badge>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center p-3 bg-white rounded-lg border">
-                    <p className="text-2xl font-bold text-slate-900">{overview?.quick_stats?.total_schools?.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-slate-900">{(effectiveOverview?.quick_stats?.total_schools ?? 0).toLocaleString()}</p>
                     <p className="text-xs text-slate-500">Schools</p>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg border">
-                    <p className="text-2xl font-bold text-slate-900">{(overview?.quick_stats?.total_students / 100000).toFixed(1)}L</p>
+                    <p className="text-2xl font-bold text-slate-900">{((effectiveOverview?.quick_stats?.total_students ?? 0) / 100000).toFixed(1)}L</p>
                     <p className="text-xs text-slate-500">Students</p>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg border">
-                    <p className="text-2xl font-bold text-slate-900">{overview?.quick_stats?.total_teachers?.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-slate-900">{(effectiveOverview?.quick_stats?.total_teachers ?? 0).toLocaleString()}</p>
                     <p className="text-xs text-slate-500">Teachers</p>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg border">
-                    <p className="text-2xl font-bold text-slate-900">{overview?.quick_stats?.total_classrooms?.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-slate-900">{(effectiveOverview?.quick_stats?.total_classrooms ?? 0).toLocaleString()}</p>
                     <p className="text-xs text-slate-500">Classrooms</p>
                   </div>
                 </div>
@@ -392,10 +552,10 @@ const ExecutiveDashboard = () => {
             <DomainCard 
               title="Student Identity" 
               icon={ShieldCheck} 
-              index={overview?.domain_summary?.identity?.index || 0}
+              index={effectiveOverview?.domain_summary?.identity?.index ?? 0}
               metrics={[
-                {label: "Aadhaar", value: `${overview?.domain_summary?.identity?.aadhaar_pct}%`},
-                {label: "APAAR", value: `${overview?.domain_summary?.identity?.apaar_pct}%`}
+                {label: "Aadhaar", value: `${effectiveOverview?.domain_summary?.identity?.aadhaar_pct ?? 0}%`},
+                {label: "APAAR", value: `${effectiveOverview?.domain_summary?.identity?.apaar_pct ?? 0}%`}
               ]}
               color="bg-blue-50 text-blue-600"
               onClick={() => setActiveTab("identity")}
@@ -404,10 +564,10 @@ const ExecutiveDashboard = () => {
             <DomainCard 
               title="Infrastructure" 
               icon={Building2} 
-              index={overview?.domain_summary?.infrastructure?.index || 0}
+              index={effectiveOverview?.domain_summary?.infrastructure?.index ?? 0}
               metrics={[
-                {label: "Classroom", value: `${overview?.domain_summary?.infrastructure?.classroom_health}%`},
-                {label: "Toilet", value: `${overview?.domain_summary?.infrastructure?.toilet_functional}%`}
+                {label: "Classroom", value: `${effectiveOverview?.domain_summary?.infrastructure?.classroom_health ?? 0}%`},
+                {label: "Toilet", value: `${effectiveOverview?.domain_summary?.infrastructure?.toilet_functional ?? 0}%`}
               ]}
               color="bg-emerald-50 text-emerald-600"
               onClick={() => setActiveTab("infrastructure")}
@@ -416,10 +576,10 @@ const ExecutiveDashboard = () => {
             <DomainCard 
               title="Teacher Quality" 
               icon={GraduationCap} 
-              index={overview?.domain_summary?.teacher?.index || 0}
+              index={effectiveOverview?.domain_summary?.teacher?.index ?? 0}
               metrics={[
-                {label: "Teachers", value: overview?.domain_summary?.teacher?.total_teachers?.toLocaleString()},
-                {label: "CTET", value: `${overview?.domain_summary?.teacher?.ctet_pct}%`}
+                {label: "Teachers", value: (effectiveOverview?.domain_summary?.teacher?.total_teachers ?? 0).toLocaleString()},
+                {label: "CTET", value: `${effectiveOverview?.domain_summary?.teacher?.ctet_pct ?? 0}%`}
               ]}
               color="bg-purple-50 text-purple-600"
               onClick={() => setActiveTab("teacher")}
@@ -428,10 +588,10 @@ const ExecutiveDashboard = () => {
             <DomainCard 
               title="Operational" 
               icon={Settings} 
-              index={overview?.domain_summary?.operational?.index || 0}
+              index={effectiveOverview?.domain_summary?.operational?.index ?? 0}
               metrics={[
-                {label: "Completion", value: `${overview?.domain_summary?.operational?.completion_rate}%`},
-                {label: "Certified", value: `${overview?.domain_summary?.operational?.certification_rate}%`}
+                {label: "Completion", value: `${effectiveOverview?.domain_summary?.operational?.completion_rate ?? 0}%`},
+                {label: "Certified", value: `${effectiveOverview?.domain_summary?.operational?.certification_rate ?? 0}%`}
               ]}
               color="bg-amber-50 text-amber-600"
               onClick={() => setActiveTab("operational")}
@@ -446,13 +606,13 @@ const ExecutiveDashboard = () => {
               <CardContent>
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={shi.shi_breakdown} layout="vertical" margin={{ left: 100 }}>
+                    <BarChart data={safeShi.shi_breakdown} layout="vertical" margin={{ left: 100 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis type="number" domain={[0, 30]} />
                       <YAxis dataKey="domain" type="category" tick={{ fontSize: 12 }} />
                       <Tooltip content={<CustomTooltip />} />
                       <Bar dataKey="contribution" name="Contribution" radius={[0, 4, 4, 0]}>
-                        {shi.shi_breakdown.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                        {safeShi.shi_breakdown.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -466,10 +626,10 @@ const ExecutiveDashboard = () => {
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={[
-                      { domain: "Identity", score: overview?.domain_summary?.identity?.index || 0 },
-                      { domain: "Infrastructure", score: overview?.domain_summary?.infrastructure?.index || 0 },
-                      { domain: "Teacher", score: overview?.domain_summary?.teacher?.index || 0 },
-                      { domain: "Operational", score: overview?.domain_summary?.operational?.index || 0 }
+                      { domain: "Identity", score: effectiveOverview?.domain_summary?.identity?.index ?? 0 },
+                      { domain: "Infrastructure", score: effectiveOverview?.domain_summary?.infrastructure?.index ?? 0 },
+                      { domain: "Teacher", score: effectiveOverview?.domain_summary?.teacher?.index ?? 0 },
+                      { domain: "Operational", score: effectiveOverview?.domain_summary?.operational?.index ?? 0 }
                     ]}>
                       <PolarGrid />
                       <PolarAngleAxis dataKey="domain" tick={{ fontSize: 11 }} />
@@ -502,7 +662,7 @@ const ExecutiveDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {shi.block_rankings?.slice(0, 10).map((block) => (
+                    {safeShi.block_rankings?.slice(0, 10).map((block) => (
                       <TableRow key={block.block_name}>
                         <TableCell className="font-medium">{block.rank}</TableCell>
                         <TableCell className="font-medium">
@@ -602,9 +762,9 @@ const ExecutiveDashboard = () => {
                     </TableBody>
                   </Table>
                 </div>
-                {mapData.summary?.districts_no_data > 5 && (
+                {(mapData?.summary?.districts_no_data ?? 0) > 5 && (
                   <p className="text-sm text-slate-400 mt-2 text-center">
-                    + {mapData.summary.districts_no_data - 5} more districts without data
+                    + {(mapData?.summary?.districts_no_data ?? 0) - 5} more districts without data
                   </p>
                 )}
               </CardContent>
@@ -615,11 +775,11 @@ const ExecutiveDashboard = () => {
         {/* STUDENT IDENTITY TAB */}
         <TabsContent value="identity" className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KPICard label="Total Students" value={(identity.summary.total_students / 100000).toFixed(1)} suffix="L" icon={Users} color="blue" />
-            <KPICard label="Aadhaar Coverage" value={identity.aadhaar_metrics.aadhaar_coverage_pct} suffix="%" icon={ShieldCheck} color="green" />
-            <KPICard label="APAAR Coverage" value={identity.apaar_metrics.apaar_coverage_pct} suffix="%" icon={CheckCircle2} color="purple" />
-            <KPICard label="Name Mismatch" value={identity.aadhaar_metrics.name_mismatch_rate} suffix="%" icon={AlertTriangle} color="amber" />
-            <KPICard label="Identity Index" value={identity.summary.identity_compliance_index} icon={Trophy} color="cyan" size="normal" />
+            <KPICard label="Total Students" value={((identitySummary.total_students ?? 0) / 100000).toFixed(1)} suffix="L" icon={Users} color="blue" />
+            <KPICard label="Aadhaar Coverage" value={safeIdentity.aadhaar_metrics.aadhaar_coverage_pct} suffix="%" icon={ShieldCheck} color="green" />
+            <KPICard label="APAAR Coverage" value={safeIdentity.apaar_metrics.apaar_coverage_pct} suffix="%" icon={CheckCircle2} color="purple" />
+            <KPICard label="Name Mismatch" value={safeIdentity.aadhaar_metrics.name_mismatch_rate} suffix="%" icon={AlertTriangle} color="amber" />
+            <KPICard label="Identity Index" value={identitySummary.identity_compliance_index ?? 0} icon={Trophy} color="cyan" size="normal" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -627,7 +787,7 @@ const ExecutiveDashboard = () => {
               <CardHeader className="pb-2"><CardTitle className="text-lg">Compliance Metrics</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex flex-wrap justify-around gap-4 py-4">
-                  {identity.compliance_breakdown.map((item, idx) => (
+                  {safeIdentity.compliance_breakdown.map((item, idx) => (
                     <GaugeChart key={idx} value={item.value} label={item.metric} color={item.color} />
                   ))}
                 </div>
@@ -639,7 +799,7 @@ const ExecutiveDashboard = () => {
               <CardContent>
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[...identity.block_performance].sort((a, b) => b.aadhaar_pct - a.aadhaar_pct).slice(0, 10)} layout="vertical" margin={{ left: 80 }}>
+                    <BarChart data={[...safeIdentity.block_performance].sort((a, b) => b.aadhaar_pct - a.aadhaar_pct).slice(0, 10)} layout="vertical" margin={{ left: 80 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis type="number" domain={[0, 100]} />
                       <YAxis dataKey="block_name" type="category" tick={{ fontSize: 11 }} />
@@ -656,11 +816,11 @@ const ExecutiveDashboard = () => {
         {/* INFRASTRUCTURE TAB */}
         <TabsContent value="infrastructure" className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KPICard label="Total Classrooms" value={infrastructure.classroom_metrics.total_classrooms} icon={Building2} color="blue" />
-            <KPICard label="Classroom Health" value={infrastructure.classroom_metrics.classroom_health_pct} suffix="%" icon={CheckCircle2} color="green" />
-            <KPICard label="Toilet Functional" value={infrastructure.toilet_metrics.functional_pct} suffix="%" icon={CheckCircle2} color="cyan" />
-            <KPICard label="Water Coverage" value={infrastructure.toilet_metrics.water_coverage_pct} suffix="%" icon={TrendingUp} color="purple" />
-            <KPICard label="Infra Index" value={infrastructure.summary.infrastructure_index} icon={Trophy} color="amber" />
+            <KPICard label="Total Classrooms" value={safeInfrastructure.classroom_metrics.total_classrooms} icon={Building2} color="blue" />
+            <KPICard label="Classroom Health" value={safeInfrastructure.classroom_metrics.classroom_health_pct} suffix="%" icon={CheckCircle2} color="green" />
+            <KPICard label="Toilet Functional" value={safeInfrastructure.toilet_metrics.functional_pct} suffix="%" icon={CheckCircle2} color="cyan" />
+            <KPICard label="Water Coverage" value={safeInfrastructure.toilet_metrics.water_coverage_pct} suffix="%" icon={TrendingUp} color="purple" />
+            <KPICard label="Infra Index" value={infraSummary.infrastructure_index ?? 0} icon={Trophy} color="amber" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -668,7 +828,7 @@ const ExecutiveDashboard = () => {
               <CardHeader className="pb-2"><CardTitle className="text-lg">Infrastructure Index Breakdown</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex flex-wrap justify-around gap-4 py-4">
-                  {infrastructure.index_breakdown.map((item, idx) => (
+                  {safeInfrastructure.index_breakdown.map((item, idx) => (
                     <GaugeChart key={idx} value={item.value} label={`${item.metric} (${item.weight}%)`} color={item.color} />
                   ))}
                 </div>
@@ -681,10 +841,10 @@ const ExecutiveDashboard = () => {
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={[
-                      { metric: "Tap Water", value: infrastructure?.water_safety?.tap_water_pct || 0 },
-                      { metric: "Purified", value: infrastructure?.water_safety?.purified_water_pct || 0 },
-                      { metric: "Tested", value: infrastructure?.water_safety?.water_tested_pct || 0 },
-                      { metric: "Rainwater", value: infrastructure?.water_safety?.rainwater_harvest_pct || 0 }
+                      { metric: "Tap Water", value: safeInfrastructure?.water_safety?.tap_water_pct || 0 },
+                      { metric: "Purified", value: safeInfrastructure?.water_safety?.purified_water_pct || 0 },
+                      { metric: "Tested", value: safeInfrastructure?.water_safety?.water_tested_pct || 0 },
+                      { metric: "Rainwater", value: safeInfrastructure?.water_safety?.rainwater_harvest_pct || 0 }
                     ]}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="metric" />
@@ -695,10 +855,10 @@ const ExecutiveDashboard = () => {
                       />
                       <Bar dataKey="value" name="Coverage %" radius={[4, 4, 0, 0]}>
                         {[
-                          { metric: "Tap Water", value: infrastructure?.water_safety?.tap_water_pct || 0 },
-                          { metric: "Purified", value: infrastructure?.water_safety?.purified_water_pct || 0 },
-                          { metric: "Tested", value: infrastructure?.water_safety?.water_tested_pct || 0 },
-                          { metric: "Rainwater", value: infrastructure?.water_safety?.rainwater_harvest_pct || 0 }
+                          { metric: "Tap Water", value: safeInfrastructure?.water_safety?.tap_water_pct || 0 },
+                          { metric: "Purified", value: safeInfrastructure?.water_safety?.purified_water_pct || 0 },
+                          { metric: "Tested", value: safeInfrastructure?.water_safety?.water_tested_pct || 0 },
+                          { metric: "Rainwater", value: safeInfrastructure?.water_safety?.rainwater_harvest_pct || 0 }
                         ].map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.value > 0 ? "#06b6d4" : "#e2e8f0"} />
                         ))}
@@ -714,29 +874,29 @@ const ExecutiveDashboard = () => {
         {/* TEACHER TAB */}
         <TabsContent value="teacher" className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KPICard label="Total Teachers" value={teacher.summary.total_teachers} icon={GraduationCap} color="blue" />
+            <KPICard label="Total Teachers" value={teacherSummary.total_teachers ?? 0} icon={GraduationCap} color="blue" />
             <KPICard 
               label="Zero Teacher Schools" 
-              value={teacher.school_teacher_distribution?.zero_teacher_schools || 0} 
+              value={safeTeacher.school_teacher_distribution?.zero_teacher_schools || 0} 
               icon={Building2} 
               color="red"
               onClick={() => handleSchoolCountClick(0)}
             />
             <KPICard 
               label="One Teacher Schools" 
-              value={teacher.school_teacher_distribution?.one_teacher_schools || 0} 
+              value={safeTeacher.school_teacher_distribution?.one_teacher_schools || 0} 
               icon={Building2} 
               color="amber"
               onClick={() => handleSchoolCountClick(1)}
             />
             <KPICard 
               label="Two Teacher Schools" 
-              value={teacher.school_teacher_distribution?.two_teacher_schools || 0} 
+              value={safeTeacher.school_teacher_distribution?.two_teacher_schools || 0} 
               icon={Building2} 
               color="cyan"
               onClick={() => handleSchoolCountClick(2)}
             />
-            <KPICard label="Quality Index" value={teacher.summary.teacher_quality_index} icon={Trophy} color="amber" />
+            <KPICard label="Quality Index" value={teacherSummary.teacher_quality_index ?? 0} icon={Trophy} color="amber" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -744,7 +904,7 @@ const ExecutiveDashboard = () => {
               <CardHeader className="pb-2"><CardTitle className="text-lg">Teacher Quality Breakdown</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex flex-wrap justify-around gap-4 py-4">
-                  {teacher.quality_breakdown.map((item, idx) => (
+                  {safeTeacher.quality_breakdown.map((item, idx) => (
                     <GaugeChart key={idx} value={item.value} label={item.metric} color={item.color} metricKey={item.metricKey} />
                   ))}
                 </div>
@@ -759,20 +919,20 @@ const ExecutiveDashboard = () => {
                     <div className="absolute top-2 right-2">
                       <MetricInfoButton metricKey="retirement_risk" />
                     </div>
-                    <p className="text-3xl font-bold text-amber-600">{teacher.risk_metrics.retirement_risk_pct}%</p>
+                    <p className="text-3xl font-bold text-amber-600">{safeTeacher.risk_metrics.retirement_risk_pct}%</p>
                     <p className="text-sm text-slate-500">Retirement Risk</p>
-                    <p className="text-xs text-slate-400">{teacher.risk_metrics.retirement_risk_count} teachers</p>
+                    <p className="text-xs text-slate-400">{safeTeacher.risk_metrics.retirement_risk_count} teachers</p>
                   </div>
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <p className="text-3xl font-bold text-blue-600">{teacher.demographic_metrics.avg_service_years}</p>
+                    <p className="text-3xl font-bold text-blue-600">{safeTeacher.demographic_metrics.avg_service_years}</p>
                     <p className="text-sm text-slate-500">Avg Service Years</p>
                   </div>
                   <div className="text-center p-4 bg-emerald-50 rounded-lg">
-                    <p className="text-3xl font-bold text-emerald-600">{teacher.risk_metrics.growth_rate}%</p>
+                    <p className="text-3xl font-bold text-emerald-600">{safeTeacher.risk_metrics.growth_rate}%</p>
                     <p className="text-sm text-slate-500">YoY Growth</p>
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <p className="text-3xl font-bold text-purple-600">{teacher.demographic_metrics.gender_parity_index}</p>
+                    <p className="text-3xl font-bold text-purple-600">{safeTeacher.demographic_metrics.gender_parity_index}</p>
                     <p className="text-sm text-slate-500">Gender Parity</p>
                   </div>
                 </div>
@@ -781,7 +941,7 @@ const ExecutiveDashboard = () => {
           </div>
 
           {/* Qualification Metrics Section */}
-          {teacher.qualification_metrics && (() => {
+          {safeTeacher.qualification_metrics && (() => {
             // Helper function to shorten qualification names
             const shortenQualification = (name) => {
               if (!name) return "";
@@ -816,7 +976,7 @@ const ExecutiveDashboard = () => {
             };
 
             // Process data with shortened labels
-            const profData = (teacher.qualification_metrics.professional_qualification_distribution || [])
+            const profData = (safeTeacher.qualification_metrics.professional_qualification_distribution || [])
               .slice(0, 8)
               .map(item => ({
                 ...item,
@@ -824,7 +984,7 @@ const ExecutiveDashboard = () => {
                 fullLabel: item.qualification
               }));
 
-            const acadData = (teacher.qualification_metrics.academic_qualification_distribution || [])
+            const acadData = (safeTeacher.qualification_metrics.academic_qualification_distribution || [])
               .slice(0, 8)
               .map(item => ({
                 ...item,
@@ -837,28 +997,28 @@ const ExecutiveDashboard = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <KPICard 
                     label="B.Ed or Higher" 
-                    value={teacher.qualification_metrics.b_ed_or_higher_pct} 
+                    value={safeTeacher.qualification_metrics.b_ed_or_higher_pct} 
                     suffix="%" 
                     icon={GraduationCap} 
                     color="green" 
                   />
                   <KPICard 
                     label="Post Graduate" 
-                    value={teacher.qualification_metrics.post_graduate_pct} 
+                    value={safeTeacher.qualification_metrics.post_graduate_pct} 
                     suffix="%" 
                     icon={GraduationCap} 
                     color="purple" 
                   />
                   <KPICard 
                     label="Top Prof. Qual." 
-                    value={teacher.qualification_metrics.top_professional_qualification?.percentage || 0} 
+                    value={safeTeacher.qualification_metrics.top_professional_qualification?.percentage || 0} 
                     suffix="%" 
                     icon={CheckCircle2} 
                     color="blue" 
                   />
                   <KPICard 
                     label="Top Acad. Qual." 
-                    value={teacher.qualification_metrics.top_academic_qualification?.percentage || 0} 
+                    value={safeTeacher.qualification_metrics.top_academic_qualification?.percentage || 0} 
                     suffix="%" 
                     icon={CheckCircle2} 
                     color="cyan" 
@@ -980,11 +1140,11 @@ const ExecutiveDashboard = () => {
         {/* OPERATIONAL TAB */}
         <TabsContent value="operational" className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KPICard label="Total Students" value={(operational.summary.total_students / 100000).toFixed(1)} suffix="L" icon={Users} color="blue" />
-            <KPICard label="Completion Rate" value={operational.data_entry_metrics.completion_rate} suffix="%" icon={CheckCircle2} color="green" />
-            <KPICard label="Certification" value={operational.data_entry_metrics.certification_rate} suffix="%" icon={ShieldCheck} color="purple" />
-            <KPICard label="Data Accuracy" value={operational.dropbox_metrics.data_accuracy} suffix="%" icon={TrendingUp} color="cyan" />
-            <KPICard label="Ops Index" value={operational.summary.operational_index} icon={Trophy} color="amber" />
+            <KPICard label="Total Students" value={((operationalSummary.total_students ?? 0) / 100000).toFixed(1)} suffix="L" icon={Users} color="blue" />
+            <KPICard label="Completion Rate" value={safeOperational.data_entry_metrics.completion_rate} suffix="%" icon={CheckCircle2} color="green" />
+            <KPICard label="Certification" value={safeOperational.data_entry_metrics.certification_rate} suffix="%" icon={ShieldCheck} color="purple" />
+            <KPICard label="Data Accuracy" value={safeOperational.dropbox_metrics.data_accuracy} suffix="%" icon={TrendingUp} color="cyan" />
+            <KPICard label="Ops Index" value={operationalSummary.operational_index ?? 0} icon={Trophy} color="amber" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -992,7 +1152,7 @@ const ExecutiveDashboard = () => {
               <CardHeader className="pb-2"><CardTitle className="text-lg">Operational Index Breakdown</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex flex-wrap justify-around gap-4 py-4">
-                  {operational.index_breakdown.map((item, idx) => (
+                  {safeOperational.index_breakdown.map((item, idx) => (
                     <GaugeChart key={idx} value={item.value} label={item.metric} color={item.color} />
                   ))}
                 </div>
@@ -1007,8 +1167,8 @@ const ExecutiveDashboard = () => {
                     <PieChart>
                       <Pie 
                         data={[
-                          { name: "Girls", value: operational.enrolment_metrics.girls_enrolment, color: "#ec4899" },
-                          { name: "Boys", value: operational.enrolment_metrics.boys_enrolment, color: "#3b82f6" }
+                          { name: "Girls", value: safeOperational.enrolment_metrics.girls_enrolment, color: "#ec4899" },
+                          { name: "Boys", value: safeOperational.enrolment_metrics.boys_enrolment, color: "#3b82f6" }
                         ]} 
                         dataKey="value" 
                         nameKey="name" 
@@ -1036,29 +1196,29 @@ const ExecutiveDashboard = () => {
             <CardContent className="p-8">
               <div className="flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="flex items-center gap-8">
-                  <GaugeChart value={shi.summary.school_health_index} label="" size="large" color={shi.summary.rag_status.color} />
+                  <GaugeChart value={shiSummary.school_health_index ?? 0} label="" size="large" color={shiSummary.rag_status?.color ?? "#ef4444"} />
                   <div>
                     <h2 className="text-3xl font-bold text-slate-900">School Health Index</h2>
                     <p className="text-slate-500 mt-1">Composite measure of school ecosystem health</p>
                     <div className="flex gap-4 mt-4">
-                      <Badge className={shi.summary.rag_status.status === 'Green' ? 'bg-emerald-100 text-emerald-700' : shi.summary.rag_status.status === 'Amber' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}>
-                        {shi.summary.rag_status.status}
+                      <Badge className={shiSummary.rag_status?.status === 'Green' ? 'bg-emerald-100 text-emerald-700' : shiSummary.rag_status?.status === 'Amber' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}>
+                        {shiSummary.rag_status?.status ?? 'Red'}
                       </Badge>
-                      <span className="text-slate-500">{shi.summary.total_schools?.toLocaleString()} Schools | {(shi.summary.total_students / 100000).toFixed(1)}L Students</span>
+                      <span className="text-slate-500">{(shiSummary.total_schools ?? 0).toLocaleString()} Schools | {((shiSummary.total_students ?? 0) / 100000).toFixed(1)}L Students</span>
                     </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center p-3 bg-emerald-100 rounded-lg">
-                    <p className="text-2xl font-bold text-emerald-700">{shi.rag_distribution?.green || 0}</p>
+                    <p className="text-2xl font-bold text-emerald-700">{safeShi.rag_distribution?.green || 0}</p>
                     <p className="text-xs text-emerald-600">Green Blocks</p>
                   </div>
                   <div className="text-center p-3 bg-amber-100 rounded-lg">
-                    <p className="text-2xl font-bold text-amber-700">{shi.rag_distribution?.amber || 0}</p>
+                    <p className="text-2xl font-bold text-amber-700">{safeShi.rag_distribution?.amber || 0}</p>
                     <p className="text-xs text-amber-600">Amber Blocks</p>
                   </div>
                   <div className="text-center p-3 bg-red-100 rounded-lg">
-                    <p className="text-2xl font-bold text-red-700">{shi.rag_distribution?.red || 0}</p>
+                    <p className="text-2xl font-bold text-red-700">{safeShi.rag_distribution?.red || 0}</p>
                     <p className="text-xs text-red-600">Red Blocks</p>
                   </div>
                 </div>
@@ -1067,7 +1227,7 @@ const ExecutiveDashboard = () => {
           </Card>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(shi.domain_scores).map(([key, domain]) => (
+            {Object.entries(safeShi.domain_scores).map(([key, domain]) => (
               <Card key={key} className={`border-l-4 ${domain.rag.status === 'Green' ? 'border-l-emerald-500' : domain.rag.status === 'Amber' ? 'border-l-amber-500' : 'border-l-red-500'}`}>
                 <CardContent className="p-4">
                   <p className="text-xs text-slate-500 uppercase">{key.replace('_', ' ')}</p>
@@ -1096,7 +1256,7 @@ const ExecutiveDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {shi.block_rankings?.map((block) => (
+                    {safeShi.block_rankings?.map((block) => (
                       <TableRow key={block.block_name}>
                         <TableCell>{block.rank}</TableCell>
                         <TableCell className="font-medium">

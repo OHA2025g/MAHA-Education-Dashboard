@@ -36,38 +36,38 @@ local-hosting-package/
 │   ├── nginx.conf             # Nginx configuration
 │   └── package.json           # Node.js dependencies
 │
-├── config/                     # Configuration templates
-│   ├── env.example            # Environment variables template
-│   └── env.local.template     # Local environment template
+├── config/                     # Configuration templates (see config/README.md)
+│   ├── env.example             # Environment variables template
+│   ├── env.local.template      # Local environment template
+│   ├── env.prod.example        # Production env example
+│   └── README.md
 │
-├── data/                       # Data files
-│   ├── excel/                 # Source Excel files
-│   ├── mongodb/               # MongoDB dumps
-│   └── README.md              # Data documentation
+├── data/                       # Data files (see data/README.md)
+│   ├── excel/                  # Source Excel files
+│   ├── mongodb/                # MongoDB dumps (e.g. maharashtra_edu/)
+│   └── README.md
 │
-├── docs/                       # Documentation
-│   ├── api/                   # API documentation
-│   ├── deployment/            # Deployment guides
-│   │   ├── DOCKER_DEPLOYMENT.md
-│   │   ├── QUICK_START_DOCKER.md
-│   │   └── ...
-│   ├── development/           # Development guides
-│   ├── testing/               # Testing documentation
-│   │   ├── TESTING.md
-│   │   ├── TEST_RESULTS_SUMMARY.md
-│   │   └── ...
-│   └── README.md              # Documentation index
+├── docs/                       # All documentation (see docs/README.md)
+│   ├── api/                    # API reference
+│   ├── deployment/             # Docker, production, login fixes
+│   ├── development/            # Development guides
+│   ├── guides/                 # User/feature guides (Executive Dashboard, metrics, etc.)
+│   ├── testing/                # Test docs and outputs (TESTING.md, test_results.txt, etc.)
+│   ├── archive/                # One-off completed notes
+│   └── README.md               # Documentation index
 │
-├── scripts/                    # Utility scripts
-│   ├── check_test_requirements.py
+├── scripts/                    # Utility scripts (see scripts/README.md)
+│   ├── run_comprehensive_tests.sh
 │   ├── run_tests.sh
-│   ├── setup_test_env.sh
-│   └── START_SERVICES.sh
+│   ├── run_ctteacher_etl.py
+│   ├── START_SERVICES.sh
+│   ├── create_admin_user.py
+│   └── ...
 │
 ├── docker-compose.yml          # Docker Compose configuration
-├── docker-compose.prod.yml    # Production override
-├── Makefile                   # Make commands
-├── README.md                  # Main project README
+├── docker-compose.prod.yml     # Production override
+├── Makefile                    # Make commands
+├── README.md                   # Main project README
 └── PROJECT_STRUCTURE.md       # This file
 ```
 
@@ -113,22 +113,24 @@ local-hosting-package/
 
 ### Documentation (`docs/`)
 
-- **`deployment/`**: Docker and deployment guides
-- **`testing/`**: Testing documentation and results
-- **`api/`**: API documentation (generated from Swagger)
+- **`deployment/`**: Docker, production deployment, login fixes
+- **`testing/`**: Testing docs, test results, and reports
+- **`guides/`**: Executive Dashboard verification, metric info, feature guides
+- **`archive/`**: Completed one-off notes
+- **`api/`**: API reference (Swagger at /docs when backend runs)
 - **`development/`**: Development guides
 
 ### Scripts (`scripts/`)
 
-- **`START_SERVICES.sh`**: Start all Docker services
-- **`run_tests.sh`**: Run test suite
-- **`setup_test_env.sh`**: Setup testing environment
-- **`check_test_requirements.py`**: Verify test prerequisites
+- **`START_SERVICES.sh`**: Start Docker or local services
+- **`run_tests.sh`**: Run backend pytest
+- **`run_comprehensive_tests.sh`**: Full test suite (writes to docs/testing/)
+- **`run_ctteacher_etl.py`**: Load CT Teacher Excel into MongoDB
+- **`create_admin_user.py`**, **`setup_test_env.sh`**, etc. — see `scripts/README.md`
 
 ### Configuration (`config/`)
 
-- **`env.example`**: Environment variables template
-- **`env.local.template`**: Local environment template
+- **`env.example`**, **`env.local.template`**, **`env.prod.example`**: Env templates (copy to root as `.env`)
 
 ### Data (`data/`)
 
@@ -158,21 +160,14 @@ local-hosting-package/
 
 ## 📝 Documentation Files
 
-### Main Documentation
+### Root (minimal)
 
-- **`README.md`**: Main project README with setup instructions
-- **`PROJECT_STRUCTURE.md`**: This file
+- **`README.md`**: Main project README and setup
+- **`PROJECT_STRUCTURE.md`**: This file — all other docs live under **`docs/`**
 
-### Deployment Documentation
+### Docs index
 
-- **`docs/deployment/DOCKER_DEPLOYMENT.md`**: Complete Docker guide
-- **`docs/deployment/QUICK_START_DOCKER.md`**: Quick Docker start
-
-### Testing Documentation
-
-- **`docs/testing/TESTING.md`**: Complete testing guide
-- **`docs/testing/TEST_RESULTS_SUMMARY.md`**: Test results
-- **`docs/testing/QUICK_START_TESTING.md`**: Quick testing start
+- **`docs/README.md`**: Index of all documentation (deployment, testing, guides, archive)
 
 ## 🚀 Quick Navigation
 

@@ -140,6 +140,7 @@ const EnrolmentDashboard = () => {
   const [retentionData, setRetentionData] = useState([]);
   const [smallSchools, setSmallSchools] = useState([]);
   const [largeSchools, setLargeSchools] = useState([]);
+  const [managementWiseData, setManagementWiseData] = useState([]);
   const [activeTab, setActiveTab] = useState("executive");
 
   const fetchData = useCallback(async () => {
@@ -153,7 +154,8 @@ const EnrolmentDashboard = () => {
         blockRes,
         retentionRes,
         smallRes,
-        largeRes
+        largeRes,
+        managementRes
       ] = await Promise.all([
         axios.get(`${API}/enrolment/overview`),
         axios.get(`${API}/enrolment/class-wise`),
@@ -162,7 +164,8 @@ const EnrolmentDashboard = () => {
         axios.get(`${API}/enrolment/block-wise`),
         axios.get(`${API}/enrolment/retention-analysis`),
         axios.get(`${API}/enrolment/risk-schools?risk_type=small`),
-        axios.get(`${API}/enrolment/risk-schools?risk_type=large`)
+        axios.get(`${API}/enrolment/risk-schools?risk_type=large`),
+        axios.get(`${API}/enrolment/management-wise`)
       ]);
       
       setOverview(overviewRes.data);
@@ -173,6 +176,7 @@ const EnrolmentDashboard = () => {
       setRetentionData(retentionRes.data);
       setSmallSchools(smallRes.data);
       setLargeSchools(largeRes.data);
+      setManagementWiseData(Array.isArray(managementRes.data) ? managementRes.data : []);
     } catch (error) {
       console.error("Error fetching Enrolment data:", error);
       toast.error("Failed to load enrolment data");
@@ -447,6 +451,99 @@ const EnrolmentDashboard = () => {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Enrolment by Management Type: Government, Private Government Aided, Private Unaided */}
+              {managementWiseData.some((d) => d.school_count > 0) && (
+                <Card className="border-slate-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg" style={{ fontFamily: 'Manrope' }}>
+                      Enrolment by Management Type
+                    </CardTitle>
+                    <CardDescription>Differentiation by Government, Private Government Aided, and Private Unaided</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
+                        <p className="text-sm font-medium text-slate-600 mb-2">Schools &amp; Enrolment by Management</p>
+                        <div className="h-72">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={managementWiseData.filter((d) => d.school_count > 0 || d.total_enrolment > 0)}
+                              layout="vertical"
+                              margin={{ left: 20, right: 20 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                              <XAxis type="number" />
+                              <YAxis dataKey="management" type="category" width={160} tick={{ fontSize: 11 }} />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Legend />
+                              <Bar dataKey="school_count" name="Schools" fill="#1e3a8a" radius={[0, 4, 4, 0]} />
+                              <Bar dataKey="total_enrolment" name="Total Enrolment" fill="#059669" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-600 mb-2">Share of Enrolment by Management</p>
+                        <div className="h-72">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={managementWiseData.filter((d) => d.total_enrolment > 0)}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={95}
+                                paddingAngle={2}
+                                dataKey="total_enrolment"
+                                nameKey="management"
+                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                              >
+                                {managementWiseData
+                                  .filter((d) => d.total_enrolment > 0)
+                                  .map((entry, index) => (
+                                    <Cell
+                                      key={`mgmt-${index}`}
+                                      fill={entry.management === "Government" ? "#1e3a8a" : entry.management === "Private Government Aided" ? "#059669" : "#d97706"}
+                                    />
+                                  ))}
+                              </Pie>
+                              <Tooltip formatter={(value) => value?.toLocaleString()} />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50">
+                            <TableHead className="font-medium">Management</TableHead>
+                            <TableHead className="font-medium text-right">Schools</TableHead>
+                            <TableHead className="font-medium text-right">Total Enrolment</TableHead>
+                            <TableHead className="font-medium text-right">Avg/School</TableHead>
+                            <TableHead className="font-medium text-right">Girls %</TableHead>
+                            <TableHead className="font-medium text-right">GPI</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {managementWiseData.filter((d) => d.school_count > 0).map((row, idx) => (
+                            <TableRow key={idx} className="hover:bg-slate-50">
+                              <TableCell className="font-medium">{row.management}</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.school_count?.toLocaleString()}</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.total_enrolment?.toLocaleString()}</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.avg_school_size?.toLocaleString()}</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.girls_pct}%</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.gender_parity_index}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Class-wise Enrolment Bar */}
               <Card className="border-slate-200">

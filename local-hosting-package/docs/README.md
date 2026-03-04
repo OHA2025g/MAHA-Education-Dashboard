@@ -5,13 +5,18 @@ Welcome to the Pune School Dashboard documentation. This directory contains all 
 ## 📚 Documentation Structure
 
 ### [Deployment](./deployment/)
-Docker and deployment guides:
-- [Docker Deployment Guide](./deployment/DOCKER_DEPLOYMENT.md) - Complete Docker setup and deployment
-- [Quick Start Docker](./deployment/QUICK_START_DOCKER.md) - Quick Docker start guide
-- [Docker Run Guide](./deployment/DOCKER_RUN_GUIDE.md) - Running Docker containers
-- [Docker Status](./deployment/DOCKER_STATUS.md) - Docker service status
-- [Start Docker](./deployment/START_DOCKER.md) - Starting Docker services
-- [Deployment Ready](./deployment/DEPLOYMENT_READY.md) - Production deployment checklist
+Docker and production deployment:
+- [Docker Deployment Guide](./deployment/DOCKER_DEPLOYMENT.md) - Complete Docker setup
+- [Quick Start Docker](./deployment/QUICK_START_DOCKER.md) - Quick Docker start
+- [Docker Run Guide](./deployment/DOCKER_RUN_GUIDE.md) - Running containers
+- [Docker Setup](./deployment/DOCKER_SETUP.md) - Docker setup details
+- [Start Docker](./deployment/START_DOCKER.md) - Starting services
+- [Deployment Ready](./deployment/DEPLOYMENT_READY.md) - Production checklist
+- [Production Deployment](./deployment/PRODUCTION_DEPLOYMENT.md) - Production steps
+- [Production Login Fix](./deployment/PRODUCTION_LOGIN_FIX.md) - Login fixes for production
+- [Quick Start Production](./deployment/QUICK_START_PRODUCTION.md) - Production quick start
+- [Deployment Fix](./deployment/DEPLOYMENT_FIX.md) - Deployment fixes
+- [Login Fix](./deployment/LOGIN_FIX.md) / [Quick Fix Login](./deployment/QUICK_FIX_LOGIN.md) - Login troubleshooting
 
 ### [Testing](./testing/)
 Comprehensive testing documentation:
@@ -23,8 +28,22 @@ Comprehensive testing documentation:
 - [Test Setup Complete](./testing/TEST_SETUP_COMPLETE.md) - Test environment setup
 - [Testing Links](./testing/TESTING_LINKS.md) - API testing endpoints
 - [Active Testing Links](./testing/ACTIVE_TESTING_LINKS.txt) - Current testing URLs
+- [Testing Links Active](./testing/TESTING_LINKS_ACTIVE.md) - Active test links
+- [Comprehensive Test Report](./testing/COMPREHENSIVE_TEST_REPORT.md) - Full test report
+- [Final Test Report](./testing/FINAL_TEST_REPORT.md) - Final test summary
 - [Fixes Applied](./testing/FIXES_APPLIED.md) - Test fixes and resolutions
 - [Venv Setup](./testing/VENV_SETUP_COMPLETE.md) - Virtual environment setup
+- `test_results.txt`, `comprehensive_test_results.json` - Test outputs (in this folder)
+
+### [Guides](./guides/)
+User and developer guides:
+- [Executive Dashboard Verification](./guides/EXECUTIVE_DASHBOARD_VERIFICATION.md) - Verify Executive Dashboard and Retirement Risk
+- [Metric Info Guide](./guides/METRIC_INFO_GUIDE.md) - Metric definitions and info buttons
+- [WOW Features](./guides/WOW_FEATURES.md) - Feature overview
+
+### [Archive](./archive/)
+Completed one-off notes:
+- [Reorganization Complete](./archive/REORGANIZATION_COMPLETE.md)
 
 ### [API](./api/)
 API documentation and reference:

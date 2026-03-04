@@ -621,17 +621,17 @@ async def fetch_age_enrolment_data():
     return {"headers": headers, "rows": rows, "kpis": kpis}
 
 async def fetch_ctteacher_data():
-    """Fetch CTTeacher data"""
+    """Fetch CTTeacher data from ctteacher_analytics"""
     pipeline = [
         {"$group": {
             "_id": "$block_name",
             "count": {"$sum": 1},
-            "ctet": {"$sum": {"$cond": [{"$eq": ["$ctet_qualified", True]}, 1, 0]}},
-            "nishtha": {"$sum": {"$cond": [{"$eq": ["$nishtha_completed", True]}, 1, 0]}}
+            "ctet": {"$sum": {"$cond": [{"$in": ["$ctet_qualified", [1, True]]}, 1, 0]}},
+            "nishtha": {"$sum": {"$cond": [{"$gte": ["$training_nishtha", 1]}, 1, 0]}}
         }},
         {"$sort": {"count": -1}}
     ]
-    data = await db.ctteacher.aggregate(pipeline).to_list(100)
+    data = await db.ctteacher_analytics.aggregate(pipeline).to_list(100)
     
     headers = ["Block", "Teachers", "CTET Qualified", "CTET %", "NISHTHA Completed", "NISHTHA %"]
     rows = [[d["_id"], d["count"], d["ctet"], round(d["ctet"]/max(d["count"],1)*100, 1),

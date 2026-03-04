@@ -132,6 +132,7 @@ const DropboxDashboard = () => {
   const [dataQuality, setDataQuality] = useState(null);
   const [transitionData, setTransitionData] = useState([]);
   const [dropoutHotspots, setDropoutHotspots] = useState([]);
+  const [managementWiseData, setManagementWiseData] = useState([]);
   const [activeTab, setActiveTab] = useState("overview");
 
   const fetchData = useCallback(async () => {
@@ -144,7 +145,8 @@ const DropboxDashboard = () => {
         topRes,
         qualityRes,
         transitionRes,
-        hotspotRes
+        hotspotRes,
+        managementRes
       ] = await Promise.all([
         axios.get(`${API}/dropbox/overview`),
         axios.get(`${API}/dropbox/category-distribution`),
@@ -152,7 +154,8 @@ const DropboxDashboard = () => {
         axios.get(`${API}/dropbox/top-schools`),
         axios.get(`${API}/dropbox/data-quality`),
         axios.get(`${API}/dropbox/transition-analysis`),
-        axios.get(`${API}/dropbox/dropout-hotspots`)
+        axios.get(`${API}/dropbox/dropout-hotspots`),
+        axios.get(`${API}/dropbox/management-wise`)
       ]);
       
       setOverview(overviewRes.data);
@@ -162,6 +165,7 @@ const DropboxDashboard = () => {
       setDataQuality(qualityRes.data);
       setTransitionData(transitionRes.data);
       setDropoutHotspots(hotspotRes.data);
+      setManagementWiseData(Array.isArray(managementRes.data) ? managementRes.data : []);
     } catch (error) {
       console.error("Error fetching Dropbox data:", error);
       toast.error("Failed to load dropbox remarks data");
@@ -434,6 +438,103 @@ const DropboxDashboard = () => {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Schools by Management Type: Government, Private Aided, Private Unaided */}
+              {managementWiseData.length > 0 && (
+                <Card className="border-slate-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg" style={{ fontFamily: 'Manrope' }}>
+                      Schools by Management Type
+                    </CardTitle>
+                    <CardDescription>Differentiation by Government, Private Aided, and Private Unaided</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
+                        <p className="text-sm font-medium text-slate-600 mb-2">Schools &amp; Remarks by Management</p>
+                        <div className="h-72">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={managementWiseData.filter((d) => d.school_count > 0 || d.total_remarks > 0)}
+                              layout="vertical"
+                              margin={{ left: 20, right: 20 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                              <XAxis type="number" />
+                              <YAxis dataKey="management" type="category" width={120} tick={{ fontSize: 12 }} />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Legend />
+                              <Bar dataKey="school_count" name="Schools" fill="#1e3a8a" radius={[0, 4, 4, 0]} />
+                              <Bar dataKey="total_remarks" name="Total Remarks" fill="#059669" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-600 mb-2">Share of Remarks by Management</p>
+                        <div className="h-72">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={managementWiseData.filter((d) => d.total_remarks > 0)}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={95}
+                                paddingAngle={2}
+                                dataKey="total_remarks"
+                                nameKey="management"
+                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                              >
+                                {managementWiseData
+                                  .filter((d) => d.total_remarks > 0)
+                                  .map((entry, index) => (
+                                    <Cell
+                                      key={`mgmt-${index}`}
+                                      fill={entry.management === "Government" ? "#1e3a8a" : entry.management === "Private Aided" ? "#059669" : "#d97706"}
+                                    />
+                                  ))}
+                              </Pie>
+                              <Tooltip formatter={(value) => value?.toLocaleString()} />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50">
+                            <TableHead className="font-medium">Management</TableHead>
+                            <TableHead className="font-medium text-right">Schools</TableHead>
+                            <TableHead className="font-medium text-right">Total Remarks</TableHead>
+                            <TableHead className="font-medium text-right">Avg/School</TableHead>
+                            <TableHead className="font-medium text-right">Dropout</TableHead>
+                            <TableHead className="font-medium text-right">Dropout %</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {managementWiseData.filter((d) => d.school_count > 0).map((row, idx) => (
+                            <TableRow key={idx} className="hover:bg-slate-50">
+                              <TableCell className="font-medium">{row.management}</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.school_count?.toLocaleString()}</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.total_remarks?.toLocaleString()}</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.avg_remarks_per_school}</TableCell>
+                              <TableCell className="text-right tabular-nums">{row.dropout?.toLocaleString()}</TableCell>
+                              <TableCell className="text-right">
+                                <Badge className={row.dropout_pct > 10 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}>
+                                  {row.dropout_pct}%
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Top Blocks */}
               <Card className="border-slate-200">

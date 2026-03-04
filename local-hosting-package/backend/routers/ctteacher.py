@@ -628,7 +628,7 @@ async def import_ctteacher_data(
     background_tasks: BackgroundTasks,
     url: str = Query(None, description="URL of Excel file to import")
 ):
-    """Import CTTeacher data from Excel file"""
+    """Import CTTeacher data from Excel file URL"""
     if not url:
         url = "https://customer-assets.emergentagent.com/job_e600aca7-d1b5-4003-a850-c6b4b2f65c48/artifacts/7h74ajig_8.%20CTTeacher%20Data%202025-26.xlsx"
     
@@ -651,6 +651,34 @@ async def import_ctteacher_data(
     
     except Exception as e:
         logging.error(f"CTTeacher import error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/import/upload")
+async def import_ctteacher_upload(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="CT Teacher Excel file (.xlsx)")
+):
+    """Import CTTeacher data from uploaded Excel file (real data). Loads into ctteacher_analytics; Retirement Risk uses this data."""
+    if not file.filename or not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
+        raise HTTPException(status_code=400, detail="Please upload an Excel file (.xlsx or .xls)")
+    
+    import_id = str(uuid.uuid4())[:8]
+    safe_name = file.filename.replace(" ", "_")
+    file_path = UPLOADS_DIR / f"ctteacher_{import_id}_{safe_name}"
+    
+    try:
+        content = await file.read()
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(content)
+        background_tasks.add_task(process_ctteacher_file, str(file_path), file.filename, import_id)
+        return {
+            "status": "processing",
+            "import_id": import_id,
+            "message": "CT Teacher file uploaded; import started. Refresh Executive Dashboard → Teacher & Staffing after completion.",
+        }
+    except Exception as e:
+        logging.error(f"CTTeacher upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
