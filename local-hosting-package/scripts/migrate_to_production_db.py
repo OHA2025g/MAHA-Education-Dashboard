@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Connection strings
 LOCAL_MONGO_URL = os.environ.get("LOCAL_MONGO_URL", "mongodb://localhost:27017")
-REMOTE_MONGO_URL = os.environ.get("REMOTE_MONGO_URL", "mongodb://mongo:b5a7adcac8107c867aa1@31.97.207.166:27017/?tls=false")
+REMOTE_MONGO_URL = os.environ.get("REMOTE_MONGO_URL", "mongodb://mongo:b5a7adcac8107c867aa1@31.97.207.166:27017")
 DB_NAME = os.environ.get("DB_NAME", "maharashtra_edu")
 
 # Collections to migrate

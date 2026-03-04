@@ -12,7 +12,7 @@ echo ""
 
 # Set default values
 LOCAL_MONGO_URL="${LOCAL_MONGO_URL:-mongodb://localhost:27017}"
-REMOTE_MONGO_URL="${REMOTE_MONGO_URL:-mongodb://mongo:b5a7adcac8107c867aa1@31.97.207.166:27017/?tls=false}"
+REMOTE_MONGO_URL="${REMOTE_MONGO_URL:-mongodb://mongo:b5a7adcac8107c867aa1@31.97.207.166:27017}"
 DB_NAME="${DB_NAME:-maharashtra_edu}"
 
 # Check if running in Docker
